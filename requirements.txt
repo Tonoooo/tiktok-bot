@@ -1,0 +1,7 @@
+    undetected-chromedriver
+    selenium
+    yt-dlp
+    whisper-timestamped
+    Flask
+    Flask-SQLAlchemy
+    google-generativeai
