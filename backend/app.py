@@ -6,7 +6,7 @@ import threading # Tambahkan import ini
 from models import db, User, CreatorSettings
 
 # Import fungsi bot yang sudah kita buat
-from akses-komen.bot import run_tiktok_bot
+from akses_komen.bot import run_tiktok_bot
 
 app = Flask(__name__)
 # ... existing app.config ...
