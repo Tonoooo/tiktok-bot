@@ -21,8 +21,8 @@ with app.app_context():
     hashed_password = generate_password_hash("password_aman")
 
     # Cek apakah user sudah ada untuk mencegah duplikasi jika script dijalankan berkali-kali
-    if not User.query.filter_by(username='creator_bot_user').first():
-        user1 = User(username='creator_bot_user', email='botuser@example.com', password_hash=hashed_password)
+    if not User.query.filter_by(username='cozy_kilo').first():
+        user1 = User(username='cozy_kilo', email='cozy_kilo@gmail.com', password_hash=hashed_password)
         db.session.add(user1)
         db.session.commit() # Commit user dulu untuk mendapatkan ID
         print("User 'creator_bot_user' ditambahkan.")
@@ -35,7 +35,7 @@ with app.app_context():
         import json # Pastikan import json ada di initialize_db.py
         settings1 = CreatorSettings(
             user_id=user1.id,
-            tiktok_username='nama_akun_tiktok_anda', # Ganti dengan username TikTok Anda
+            tiktok_username='cozy_kilo', # Ganti dengan username TikTok Anda
             creator_character_description='pria, usia 20-an, tegas, suka humor, sering menggunakan kata "mantap"',
             gemini_api_key='AIzaSyDtIN6C60dm3-c3D3t2o0sYY293xktxe_U', # Ganti dengan API key asli Anda
             is_active=True,

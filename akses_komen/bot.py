@@ -12,8 +12,8 @@ import json # BARU: Untuk mengelola JSON dari DB
 import datetime
 
 # Import fungsi dari service files
-from transcription_service import get_video_transcript
-from llm_service import generate_ai_reply
+from .transcription_service import get_video_transcript
+from .llm_service import generate_ai_reply
 
 # BARU: Import db dan model dari backend
 from backend.models import db, User, CreatorSettings

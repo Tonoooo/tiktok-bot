@@ -3,7 +3,7 @@ from flask_cors import CORS
 from datetime import datetime, timedelta
 import threading 
 
-from models import db, User, CreatorSettings
+from backend.models import db, User, CreatorSettings
 
 from akses_komen.bot import run_tiktok_bot_task # UNCOMMENT INI
 
