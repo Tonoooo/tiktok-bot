@@ -1,56 +1,287 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 from datetime import datetime, timedelta
 import threading 
+import os 
+import json 
 
-from backend.models import db, User, CreatorSettings
+from backend.models import db, User, ProcessedVideo
+from akses_komen.bot import run_tiktok_bot_task 
 
-from akses_komen.bot import run_tiktok_bot_task # UNCOMMENT INI
+# BARU: Import fungsi dari qr_login_service
+from akses_komen.qr_login_service import generate_qr_and_wait_for_login, QR_CODE_TEMP_DIR
+
+from flask_login import LoginManager, login_user, logout_user, login_required, current_user 
+from werkzeug.security import generate_password_hash, check_password_hash 
 
 app = Flask(__name__)
-# ... existing app.config ...
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///site.db'
+
+# Konfigurasi Flask app untuk database
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
+db_path = os.path.join(project_root, 'site.db')
+
+app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['SECRET_KEY'] = 'your_secret_key' # Ganti dengan kunci rahasia yang kuat di produksi
+app.config['SECRET_KEY'] = 'your_secret_key' 
 
 CORS(app) 
 
 db.init_app(app)
 
-# Pastikan Anda telah menjalankan initialize_db.py TERPISAH sebelum menjalankan app ini.
-# db.create_all() # Jangan panggil di sini setiap kali app dimulai, hanya di initialize_db.py
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'login' 
+
+@login_manager.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))
 
 @app.route('/')
 def index():
     return jsonify({"message": "TikTok Auto-Responder Backend API is running!"})
 
-# Rute placeholder, akan diisi nanti
-@app.route('/api/creator_settings/<int:user_id>', methods=['GET', 'POST'])
-def handle_creator_settings(user_id):
-    # Ini akan menjadi rute untuk mengelola pengaturan creator
-    return jsonify({"message": f"Creator settings for user {user_id}"})
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if request.method == 'POST':
+        data = request.get_json()
+        username = data.get('username')
+        email = data.get('email')
+        password = data.get('password')
+        
+        if not username or not email or not password:
+            return jsonify({"message": "Username, email, and password are required."}), 400
 
+        hashed_password = generate_password_hash(password)
 
-# BARU: Endpoint untuk memicu bot
-@app.route('/api/run_bot/<int:creator_id>', methods=['POST'])
-def trigger_bot_run(creator_id):
-    creator = CreatorSettings.query.get(creator_id)
-    if not creator:
-        return jsonify({"message": f"Creator with ID {creator_id} not found."}), 404
+        with app.app_context():
+            existing_user = User.query.filter((User.username == username) | (User.email == email)).first()
+            if existing_user:
+                return jsonify({"message": "Username or email already exists."}), 409
 
-    # Mencegah bot berjalan jika sudah terlalu sering dalam sehari (opsional, bisa diatur nanti)
-    # if creator.last_run_at and (datetime.now() - creator.last_run_at).days == 0 and creator.daily_run_count >= 3:
-    #     return jsonify({"message": f"Bot for creator {creator_id} has already run 3 times today."}), 429
-
-    print(f"Memicu bot untuk creator ID: {creator_id} di thread terpisah.")
+            new_user = User(
+                username=username, 
+                email=email, 
+                password_hash=hashed_password,
+                tiktok_username=None, 
+                creator_character_description=None,
+                is_active=True,
+                daily_run_count=0,
+                last_run_at=None,
+                cookies_json=json.dumps([])
+            )
+            db.session.add(new_user)
+            db.session.commit()
+            print(f"User baru terdaftar: {username}")
+            return jsonify({"message": "User registered successfully!", "user_id": new_user.id}), 201
     
-    # Jalankan bot dalam thread terpisah
-    bot_thread = threading.Thread(target=run_tiktok_bot_task, args=(creator_id,))
-    bot_thread.start()
+    return jsonify({"message": "Send POST request to register."}), 405
 
-    return jsonify({"message": f"Bot task started for creator ID {creator_id}. Check console for progress."}), 202
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        data = request.get_json()
+        username = data.get('username')
+        password = data.get('password')
+
+        if not username or not password:
+            return jsonify({"message": "Username and password are required."}), 400
+        
+        with app.app_context():
+            user = User.query.filter_by(username=username).first()
+            
+            if user and check_password_hash(user.password_hash, password):
+                login_user(user) 
+                print(f"User {username} berhasil login.")
+                return jsonify({"message": "Login successful!", "user_id": user.id, "username": user.username}), 200
+            else:
+                return jsonify({"message": "Invalid username or password."}), 401
+    
+    return jsonify({"message": "Send POST request to login."}), 405
+
+@app.route('/logout')
+@login_required 
+def logout():
+    logout_user()
+    print(f"User {current_user.username if current_user.is_authenticated else 'unknown'} telah logout.")
+    return jsonify({"message": "Logged out successfully."}), 200
+
+@app.route('/dashboard')
+@login_required
+def dashboard():
+    return jsonify({"message": f"Welcome to the dashboard, {current_user.username}!", "user_id": current_user.id}), 200
+
+@app.route('/api/creator_settings/<int:user_id>', methods=['GET', 'POST'])
+@login_required 
+def handle_creator_settings(user_id):
+    if current_user.id != user_id:
+        return jsonify({"message": "Unauthorized access."}), 403
+
+    user = User.query.get(user_id) 
+    if not user:
+        return jsonify({"message": "User not found."}), 404
+
+    if request.method == 'POST':
+        data = request.get_json()
+        
+        tiktok_username = data.get('tiktok_username')
+        creator_character_description = data.get('creator_character_description')
+        is_active = data.get('is_active') 
+        daily_run_count = data.get('daily_run_count') 
+
+        if tiktok_username is not None:
+            user.tiktok_username = tiktok_username
+        if creator_character_description is not None:
+            user.creator_character_description = creator_character_description
+        if is_active is not None:
+            user.is_active = bool(is_active) 
+        if daily_run_count is not None:
+            user.daily_run_count = int(daily_run_count) 
+        
+        try:
+            db.session.add(user)
+            db.session.commit()
+            return jsonify({"message": "Creator settings updated successfully!", 
+                            "tiktok_username": user.tiktok_username,
+                            "creator_character_description": user.creator_character_description,
+                            "is_active": user.is_active,
+                            "daily_run_count": user.daily_run_count
+                            }), 200
+        except Exception as e:
+            db.session.rollback()
+            return jsonify({"message": f"Error updating settings: {e}"}), 500
+    else: 
+        return jsonify({
+            "user_id": user.id,
+            "username": user.username,
+            "email": user.email,
+            "tiktok_username": user.tiktok_username,
+            "creator_character_description": user.creator_character_description,
+            "is_active": user.is_active,
+            "daily_run_count": user.daily_run_count,
+            "last_run_at": user.last_run_at.isoformat() if user.last_run_at else None,
+            "cookies_present": bool(user.cookies_json) 
+        }), 200
+
+@app.route('/api/processed_videos/<int:user_id>', methods=['GET'])
+@login_required
+def get_processed_videos(user_id):
+    if current_user.id != user_id:
+        return jsonify({"message": "Unauthorized access."}), 403
+
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({"message": "User not found."}), 404
+
+    try:
+        videos = ProcessedVideo.query.filter_by(user_id=user_id).order_by(ProcessedVideo.processed_at.desc()).all()
+        
+        videos_data = []
+        for video in videos:
+            videos_data.append({
+                "id": video.id,
+                "video_url": video.video_url,
+                "transcript": video.transcript,
+                "processed_at": video.processed_at.isoformat() 
+            })
+        
+        return jsonify({"videos": videos_data}), 200
+    except Exception as e:
+        return jsonify({"message": f"Error fetching processed videos: {e}"}), 500
+
+
+@app.route('/api/run_bot/<int:user_id>', methods=['POST'])
+@login_required 
+def trigger_bot_run(user_id):
+    if current_user.id != user_id:
+        return jsonify({"message": "Unauthorized: You can only trigger the bot for your own user ID."}), 403
+
+    user = User.query.get(user_id) 
+    if not user: 
+        return jsonify({"message": f"User with ID {user_id} not found."}), 404
+
+    # Cek apakah user sudah memiliki cookies TikTok. Jika sudah ada, jangan picu QR login.
+    if user.cookies_json and json.loads(user.cookies_json):
+        print(f"Memicu bot untuk user ID: {user_id} di thread terpisah (menggunakan cookies yang ada).")
+        bot_thread = threading.Thread(target=run_tiktok_bot_task, args=(user_id, app,)) 
+        bot_thread.start()
+        return jsonify({"message": f"Bot task started for user ID {user_id} using existing cookies. Check console for progress."}), 202
+    else:
+        return jsonify({"message": f"User {user_id} needs to login to TikTok first. Use /api/start_tiktok_qr_login."}), 400
+
+
+# BARU: Endpoint untuk memulai proses QR login
+qr_login_tasks = {}
+
+@app.route('/api/start_tiktok_qr_login/<int:user_id>', methods=['POST'])
+@login_required
+def start_tiktok_qr_login(user_id):
+    if current_user.id != user_id:
+        return jsonify({"message": "Unauthorized access."}), 403
+
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({"message": "User not found."}), 404
+
+    # Jika sudah ada cookies, berarti sudah login, tidak perlu QR lagi
+    if user.cookies_json and json.loads(user.cookies_json):
+        return jsonify({"message": "User already has TikTok cookies. No QR login needed.", "status": "logged_in"}), 200
+
+    # Cek apakah tugas sudah berjalan untuk user ini
+    if user_id in qr_login_tasks and qr_login_tasks[user_id].is_alive():
+        return jsonify({"message": "QR login process already in progress for this user.", "status": "in_progress"}), 202
+
+    print(f"Memulai proses QR login untuk user ID: {user_id} di thread terpisah.")
+    # Jalankan generate_qr_and_wait_for_login di thread terpisah
+    # Target function akan menyimpan QR code dan cookies ke DB
+    task_thread = threading.Thread(target=generate_qr_and_wait_for_login, args=(user_id, app,))
+    task_thread.start()
+    qr_login_tasks[user_id] = task_thread
+
+    return jsonify({"message": "QR login process started. Check /api/get_tiktok_qr_status for updates.", "status": "started"}), 202
+
+# BARU: Endpoint untuk mendapatkan status QR login dan gambar
+@app.route('/api/get_tiktok_qr_status/<int:user_id>', methods=['GET'])
+@login_required
+def get_tiktok_qr_status(user_id):
+    if current_user.id != user_id:
+        return jsonify({"message": "Unauthorized access."}), 403
+
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({"message": "User not found."}), 404
+    
+    # Periksa apakah sudah ada cookies
+    if user.cookies_json and json.loads(user.cookies_json):
+        # Hapus QR code dari temp folder jika ada, karena sudah login
+        qr_image_file = f'qrcode_{user_id}.png'
+        qr_image_path = os.path.join(QR_CODE_TEMP_DIR, qr_image_file)
+        if os.path.exists(qr_image_path):
+            os.remove(qr_image_path)
+            print(f"QR code dihapus dari temp dir untuk user {user_id} karena sudah login.")
+        return jsonify({"status": "logged_in", "message": "User already logged in to TikTok."}), 200
+
+    # Jika tugas sedang berjalan
+    if user_id in qr_login_tasks and qr_login_tasks[user_id].is_alive():
+        qr_image_file = f'qrcode_{user_id}.png'
+        qr_image_path = os.path.join(QR_CODE_TEMP_DIR, qr_image_file)
+        
+        if os.path.exists(qr_image_path):
+            # Menggunakan endpoint statis untuk gambar QR (akan dibuat di bawah)
+            qr_image_url = f'/static/qr_codes/{qr_image_file}' 
+            return jsonify({"status": "qr_available", "qr_image_url": qr_image_url, "message": "Scan QR code to login."}), 200
+        else:
+            return jsonify({"status": "in_progress", "message": "Generating QR code..."}), 200
+    
+    # Jika tidak ada tugas berjalan dan belum login
+    return jsonify({"status": "not_started", "message": "QR login process not started or failed previously."}), 200
+
+# BARU: Endpoint untuk melayani file statis QR code
+@app.route('/static/qr_codes/<filename>')
+def serve_qr_code(filename):
+    # Pastikan file yang diminta berada di dalam QR_CODE_TEMP_DIR
+    return send_from_directory(QR_CODE_TEMP_DIR, filename)
 
 
 if __name__ == '__main__':
-    # db.create_all() # Ini dipanggil di initialize_db.py, tidak perlu di sini setiap kali
+    print(f"Aplikasi Flask akan menggunakan database di: {db_path}") 
     app.run(debug=True, host='0.0.0.0', port=5000)

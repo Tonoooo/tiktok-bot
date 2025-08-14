@@ -3,31 +3,38 @@ import re
 import yt_dlp
 import whisper_timestamped as whisper
 import shutil
-import time # Jangan lupa import time jika digunakan di get_video_transcript
+import time 
 
-def get_video_transcript(video_url: str) -> str:
-    # Nama file sementara untuk audio (TANPA EKSTENSI di sini)
+# BARU: Import db, User, ProcessedVideo dari backend.models
+from backend.models import db, User, ProcessedVideo 
+from flask import Flask # Untuk mengakses app_instance dalam konteks
+from datetime import datetime # Untuk mencatat processed_at
+
+# PERUBAHAN: Fungsi sekarang menerima user_id dan app_instance
+def get_video_transcript(video_url: str, user_id: int, app_instance: Flask) -> str:
     temp_audio_basename = "temp_tiktok_audio"
     transcript = ""
-    downloaded_audio_path = None # Inisialisasi variabel ini
+    downloaded_audio_path = None
 
-    # --- BARU: LOGIKA CACHING TRANSKRIP ---
-    cache_dir = "transcripts_cache"
-    os.makedirs(cache_dir, exist_ok=True) # Pastikan folder cache ada
+    # --- PERUBAHAN UTAMA: LOGIKA CACHING TRANSKRIP DARI DATABASE ---
+    with app_instance.app_context():
+        # Cari video di database untuk user dan URL ini
+        processed_video = ProcessedVideo.query.filter_by(
+            user_id=user_id, 
+            video_url=video_url
+        ).first()
 
-    video_id_match = re.search(r'/video/(\d+)', video_url)
-    video_id = video_id_match.group(1) if video_id_match else None
-
-    if video_id:
-        cache_file_path = os.path.join(cache_dir, f"{video_id}.txt")
-        if os.path.exists(cache_file_path):
-            with open(cache_file_path, 'r', encoding='utf-8') as f:
-                transcript = f.read()
-            print(f"   -> Transkrip dimuat dari cache: {cache_file_path}")
-            return transcript # Langsung kembalikan jika ditemukan di cache
-    else:
-        print(f"   -> Peringatan: Tidak dapat mengekstrak Video ID dari URL: {video_url}. Tidak akan menggunakan cache.")
-    # ------------------------------------
+        if processed_video and processed_video.transcript:
+            transcript = processed_video.transcript
+            print(f"   -> Transkrip dimuat dari database untuk video: {video_url}")
+            return transcript # Langsung kembalikan jika ditemukan di DB
+        elif processed_video and not processed_video.transcript:
+            print(f"   -> Video {video_url} sudah tercatat tapi belum ada transkrip. Akan mencoba menranskrip.")
+            # Lanjutkan untuk menranskrip dan update entri yang sudah ada
+        else:
+            print(f"   -> Video {video_url} belum ada di database. Akan menranskrip dan menyimpan.")
+            # Lanjutkan untuk menranskrip dan membuat entri baru
+    # -----------------------------------------------------------
 
     try:
         # Konfigurasi yt-dlp untuk mengunduh audio terbaik dalam format wav
@@ -38,9 +45,9 @@ def get_video_transcript(video_url: str) -> str:
                 'preferredcodec': 'wav',
                 'preferredquality': '192',
             }],
-            'outtmpl': temp_audio_basename, # Nama file output (tanpa ekstensi)
-            'quiet': True, # Supress output yt-dlp ke konsol
-            'noplaylist': True, # Pastikan hanya satu video yang diunduh
+            'outtmpl': temp_audio_basename, 
+            'quiet': True, 
+            'noplaylist': True, 
             'ffmpeg_location': 'C:/Program Files/ffmpeg/bin/ffmpeg.exe', # PATH ASLI ANDA!
             'ffprobe_location': 'C:/Program Files/ffmpeg/bin/ffprobe.exe' # PATH ASLI ANDA!
         }
@@ -48,15 +55,12 @@ def get_video_transcript(video_url: str) -> str:
         print(f"   -> Mengunduh audio dari video: {video_url}")
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info_dict = ydl.extract_info(video_url, download=True)
-            # Dapatkan nama file yang sebenarnya setelah post-processing (harusnya .wav)
-            # yt-dlp secara otomatis menambahkan ekstensi dari preferredcodec
-            downloaded_audio_path = f"{temp_audio_basename}.wav" # Asumsi yt-dlp akan membuatnya .wav
+            downloaded_audio_path = f"{temp_audio_basename}.wav" 
             
-            time.sleep(1) # Tambahkan jeda singkat untuk memastikan file siap
+            time.sleep(1) 
 
             if not os.path.exists(downloaded_audio_path):
                 print(f"   -> Peringatan: File audio {downloaded_audio_path} tidak ditemukan setelah download, mencari alternatif.")
-                # Fallback: cari file .wav apapun yang mungkin dibuat yt-dlp dengan nama dasar yang sama
                 found_files = [f for f in os.listdir('.') if f.startswith(temp_audio_basename) and f.endswith('.wav')]
                 if found_files:
                     downloaded_audio_path = found_files[0]
@@ -66,33 +70,41 @@ def get_video_transcript(video_url: str) -> str:
 
             print(f"   -> Audio berhasil diunduh ke: {downloaded_audio_path}")
 
-        # Memuat model Whisper (akan diunduh pertama kali)
-        # Gunakan model "base" untuk keseimbangan kecepatan dan akurasi.
-        # "cpu" untuk menjalankan di CPU, ganti "cuda" jika memiliki GPU NVIDIA
         print("   -> Memuat model Whisper (ini mungkin perlu waktu pertama kali)...")
-        model = whisper.load_model("base", device="cpu") # Ganti "cpu" dengan "cuda" jika Anda punya GPU NVIDIA
+        model = whisper.load_model("base", device="cpu") 
         print("   -> Model Whisper dimuat. Memulai transkripsi...")
         
-        # Transkripsi audio, tentukan bahasa Indonesia
         audio = whisper.load_audio(downloaded_audio_path)
-        result = model.transcribe(audio, language="id", word_timestamps=False) # word_timestamps=False untuk transkrip keseluruhan
+        result = model.transcribe(audio, language="id", word_timestamps=False) 
         
         if result and "text" in result:
             transcript = result["text"].strip()
             print("   -> Transkripsi selesai.")
 
-            # BARU: Simpan transkrip ke cache setelah berhasil
-            if video_id: # Pastikan kita punya video_id untuk menyimpan
-                with open(cache_file_path, 'w', encoding='utf-8') as f:
-                    f.write(transcript)
-                print(f"   -> Transkrip disimpan ke cache: {cache_file_path}")
+            # PERUBAHAN: Simpan/update transkrip ke database
+            with app_instance.app_context():
+                if processed_video: # Jika sudah ada entri, update transkrip dan processed_at
+                    processed_video.transcript = transcript
+                    processed_video.processed_at = datetime.utcnow()
+                    db.session.add(processed_video) # Tambahkan ke sesi (walau sudah di query)
+                    print(f"   -> Transkrip diperbarui di database untuk video: {video_url}")
+                else: # Jika belum ada entri, buat yang baru
+                    new_processed_video = ProcessedVideo(
+                        user_id=user_id,
+                        video_url=video_url,
+                        transcript=transcript,
+                        processed_at=datetime.utcnow()
+                    )
+                    db.session.add(new_processed_video)
+                    print(f"   -> Transkrip disimpan ke database untuk video baru: {video_url}")
+                db.session.commit() # Commit perubahan ke database
         else:
             print("   -> Transkripsi menghasilkan teks kosong.")
 
     except yt_dlp.utils.DownloadError as de:
         print(f"   -> ERROR DOWNLOAD AUDIO (yt-dlp): {de}")
         transcript = ""
-    except FileNotFoundError as fnfe: # Tangani error jika file audio tidak ditemukan
+    except FileNotFoundError as fnfe: 
         print(f"   -> ERROR FILE AUDIO TIDAK DITEMUKAN: {fnfe}")
         transcript = ""
     except Exception as e:
@@ -100,12 +112,10 @@ def get_video_transcript(video_url: str) -> str:
         transcript = ""
     finally:
         # Membersihkan file audio sementara setelah digunakan
-        if downloaded_audio_path and os.path.exists(downloaded_audio_path): # Cek apakah sudah diinisialisasi dan ada
+        if downloaded_audio_path and os.path.exists(downloaded_audio_path): 
             os.remove(downloaded_audio_path)
             print(f"   -> File sementara {downloaded_audio_path} dihapus.")
-        # Hapus juga file-file lain yang mungkin dibuat yt-dlp (misal .webp, .json)
         for f in os.listdir('.'):
-            # Pastikan hanya menghapus file yang dimulai dengan nama temp_audio_basename dan bukan nama file skrip itu sendiri
             if f.startswith(temp_audio_basename) and f != os.path.basename(__file__):
                 try:
                     os.remove(f)
