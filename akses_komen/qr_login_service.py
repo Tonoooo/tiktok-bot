@@ -41,7 +41,7 @@ def _open_tiktok_qr_modal(driver):
         print(f"Modal 'chose your interest' atau QR button tidak ditemukan, mencoba alur 'Ikuti'. Error: {e}")
         try:
             # MEMPERBARUI: Meningkatkan timeout untuk stabilitas
-            follow_button = WebDriverWait(driver, 20).until( # Ditingkatkan dari 15 menjadi 20
+            follow_button = WebDriverWait(driver, 10).until( 
                 EC.element_to_be_clickable((By.CSS_SELECTOR, '[data-e2e="follow-button"]'))
             )
             follow_button.click()
@@ -70,10 +70,10 @@ def generate_qr_and_wait_for_login(user_id: int, app_instance: Flask):
 
     try:
         options = uc.ChromeOptions()
-        options.add_argument('--headless') # Jalankan browser tanpa GUI
-        options.add_argument('--disable-gpu') # Diperlukan untuk headless di beberapa sistem
-        options.add_argument('--no-sandbox') # Diperlukan untuk headless di Linux server
-        options.add_argument('--disable-dev-shm-usage') # Mengatasi masalah resource di Docker/VPS
+        # options.add_argument('--headless') # Jalankan browser tanpa GUI
+        # options.add_argument('--disable-gpu') # Diperlukan untuk headless di beberapa sistem
+        # options.add_argument('--no-sandbox') # Diperlukan untuk headless di Linux server
+        # options.add_argument('--disable-dev-shm-usage') # Mengatasi masalah resource di Docker/VPS
         
         driver = uc.Chrome(options=options)
         print(f"WebDriver berhasil diinisialisasi untuk user {user_id} (headless).") 
@@ -91,7 +91,7 @@ def generate_qr_and_wait_for_login(user_id: int, app_instance: Flask):
             else:
                 driver.get(target_url)
 
-            time.sleep(10) # DIPERBARUI: Tambahkan jeda awal lebih lama setelah navigasi untuk stabilitas halaman
+            time.sleep(5) # Tambahkan jeda awal lebih lama setelah navigasi untuk stabilitas halaman
 
             # Awalnya, picu modal QR code
             if not _open_tiktok_qr_modal(driver):
@@ -106,126 +106,126 @@ def generate_qr_and_wait_for_login(user_id: int, app_instance: Flask):
                 EC.presence_of_element_located(qr_element_locator) 
             )
             print(f"Elemen QR code (canvas) terdeteksi untuk user {user_id}.")
+            time.sleep(3) # Jeda untuk rendering visual yang stabil
 
-            # --- Loop untuk terus-menerus mendapatkan QR code baru dengan keluar-masuk modal ---
+            # Ambil screenshot QR code awal (yang pertama kali muncul)
+            qr_data_url = driver.execute_script("return arguments[0].toDataURL('image/png');", qr_canvas_element)
+            if qr_data_url and qr_data_url.startswith("data:image/png;base64,"):
+                base64_data = qr_data_url.split(',')[1]
+                decoded_image = base64.b64decode(base64_data)
+                with open(qr_image_path, 'wb') as f:
+                    f.write(decoded_image)
+                print(f"QR code awal disimpan ke: {qr_image_path}")
+
             login_successful = False
-            
-            QR_REGENERATE_INTERVAL = 60 # DIPERBARUI: detik (waktu untuk menutup dan membuka lagi modal QR)
-            MAX_LOGIN_WAIT_TIME = 420 # DIPERBARUI: detik (total 7 menit)
+            MAX_LOGIN_WAIT_TIME = 300 # detik (total 5 menit)
+            RECHECK_INTERVAL = 5 # detik, untuk cek status
+
+            # BARU: Interval dan waktu terakhir untuk mengambil screenshot QR code
+            QR_SCREENSHOT_INTERVAL = 15 # detik
+            last_screenshot_time = time.time()
 
             start_time = time.time()
-            time_of_last_qr_regen = time.time() # Waktu terakhir QR di-regenerate
 
+            # Base URL for comparison (without query parameters like ?lang=en)
+            target_url_base = target_url.split('?')[0]
+
+            # --- Loop untuk terus-menerus mendeteksi status login ---
             while (time.time() - start_time) < MAX_LOGIN_WAIT_TIME:
                 current_time = time.time()
-                
-                # Cek apakah sudah waktunya untuk mendapatkan QR code baru dengan keluar-masuk modal
-                if (current_time - time_of_last_qr_regen) >= QR_REGENERATE_INTERVAL:
-                    print(f"Waktunya me-regenerate QR code untuk user {user_id}. Menutup dan membuka kembali modal...")
-                    time_of_last_qr_regen = current_time # Update waktu regen sebelum mencoba
 
-                    # 1. Coba tutup modal QR code saat ini
+                # --- Ambil data QR code terbaru dari canvas (untuk visualisasi di frontend) ---
+                # Hanya ambil screenshot jika sudah melewati interval yang ditentukan
+                if (current_time - last_screenshot_time) >= QR_SCREENSHOT_INTERVAL: # BARU: Cek interval screenshot
+                    last_screenshot_time = current_time # BARU: Update waktu terakhir screenshot
                     try:
-                        close_button_locator = (By.CSS_SELECTOR, '[data-e2e="modal-close-inner-button"][aria-label="Close"]')
-                        close_button = WebDriverWait(driver, 5).until(EC.element_to_be_clickable(close_button_locator))
-                        close_button.click()
-                        print("Tombol 'X' (tutup modal QR) diklik.")
-                        WebDriverWait(driver, 10).until(EC.invisibility_of_element_located(close_button_locator))
-                        print("Modal QR code berhasil ditutup.")
-                        time.sleep(2) # Beri waktu modal untuk menghilang sepenuhnya
-                    except TimeoutException:
-                        print("Peringatan: Tombol 'X' atau modal QR tidak menghilang. Melanjutkan untuk mencoba membuka ulang.")
-                    except Exception as e:
-                        print(f"Error saat menutup modal QR: {e}. Mencoba membuka ulang.")
-
-                    # 2. Buka kembali modal QR code
-                    if not _open_tiktok_qr_modal(driver):
-                        print("Gagal membuka kembali modal QR code setelah regenerasi. Mengakhiri loop login.")
-                        break # Keluar dari loop jika tidak bisa membuka modal lagi
-
-                    # 3. Tunggu elemen <canvas> QR code baru muncul lagi
-                    try:
-                        qr_canvas_element = WebDriverWait(driver, 15).until(
+                        # Re-locate elemen <canvas> setiap kali untuk menghindari StaleElementReferenceException
+                        qr_canvas_element_fresh = WebDriverWait(driver, 5).until( 
                             EC.presence_of_element_located(qr_element_locator) 
                         )
-                        print("Elemen QR code (canvas) baru terdeteksi setelah regenerasi.")
-                        time.sleep(3) # Jeda 3 detik untuk rendering visual yang stabil setelah regenerasi
-                    except TimeoutException:
-                        print("Peringatan: Elemen QR code (canvas) tidak muncul kembali setelah regenerasi. Mengakhiri loop login.")
-                        break # Keluar jika QR tidak muncul
+                        qr_data_url = driver.execute_script("return arguments[0].toDataURL('image/png');", qr_canvas_element_fresh)
 
-                # Ambil data QR code terbaru dari canvas yang baru dibuka/diregenerasi
-                qr_data_url = None
+                        if qr_data_url and qr_data_url.startswith("data:image/png;base64,"):
+                            base64_data = qr_data_url.split(',')[1]
+                            decoded_image = base64.b64decode(base64_data)
+                            with open(qr_image_path, 'wb') as f:
+                                f.write(decoded_image)
+                            print(f"QR code terbaru disimpan ke: {qr_image_path}") # Log ini diaktifkan lagi
+                        else:
+                            print("Peringatan: Data URI QR code tidak valid atau kosong saat update periodik.")
+                    except StaleElementReferenceException:
+                        print("Peringatan: Elemen QR code (canvas) menjadi stale saat mengambil data (update periodik).")
+                    except Exception as e:
+                        print(f"ERROR: Gagal mendapatkan data QR code dari canvas (update periodik): {e}.")
+
+
+                # --- Deteksi Login Berhasil (sesuai prioritas user, lebih fleksibel) ---
                 try:
-                    # Re-locate elemen <canvas> setiap kali untuk menghindari StaleElementReferenceException
-                    qr_canvas_element_fresh = WebDriverWait(driver, 5).until( 
-                        EC.presence_of_element_located(qr_element_locator) 
+                    # 1. Deteksi tampilan "QR code scanned" overlay
+                    # Ini adalah indikator prioritas utama Anda, kita akan coba deteksi ini secara agresif
+                    # Timeout 60 detik karena Anda bilang tampilannya bisa bertahan sampai 1 menit
+                    print("Menunggu tampilan 'QR code scanned' overlay (maks 60 detik)...")
+                    scanned_overlay_locator = (By.CSS_SELECTOR, '[data-e2e="qr-code"] .css-n2w5z3-DivCodeMask')
+                    WebDriverWait(driver, 60).until( 
+                        EC.presence_of_element_located(scanned_overlay_locator)
                     )
-                    qr_data_url = driver.execute_script("return arguments[0].toDataURL('image/png');", qr_canvas_element_fresh)
+                    print("Tampilan 'QR code scanned' overlay terdeteksi.")
                     
-                    if qr_data_url and qr_data_url.startswith("data:image/png;base64,"):
-                        base64_data = qr_data_url.split(',')[1]
-                        decoded_image = base64.b64decode(base64_data)
-                        
-                        with open(qr_image_path, 'wb') as f:
-                            f.write(decoded_image)
-                        
-                        print(f"QR code terbaru disimpan ke: {qr_image_path}")
-                    else:
-                        print("Peringatan: Data URI QR code tidak valid atau kosong (setelah regenerasi).")
-                except StaleElementReferenceException:
-                    print("Peringatan: Elemen QR code (canvas) menjadi stale saat mengambil data (setelah regenerasi).")
-                except Exception as e:
-                    print(f"ERROR: Gagal mendapatkan data QR code dari canvas (setelah regenerasi): {e}.")
-                
-                # Cek apakah login berhasil
-                try:
-                    # PRIORITAS: Tunggu hingga modal QR code menghilang (indikator paling andal untuk login sukses di HP)
-                    print(f"Menunggu modal QR code menghilang (maks {QR_REGENERATE_INTERVAL} detik)...")
-                    WebDriverWait(driver, QR_REGENERATE_INTERVAL).until( 
+                    # Jika overlay scanned terdeteksi, langsung anggap login sukses dan verifikasi final
+                    login_successful = True # Set flag to True early
+                    
+                    # 2. Notifikasi "Logged in" (opsional, untuk debugging/logging saja, tidak akan memblokir)
+                    try:
+                        print("Menunggu notifikasi 'Logged in' (opsional)...")
+                        logged_in_toast_locator = (By.XPATH, "//div[@role='alert']/span[text()='Logged in']")
+                        WebDriverWait(driver, 5).until( # Sangat cepat menghilang
+                            EC.presence_of_element_located(logged_in_toast_locator)
+                        )
+                        print("Notifikasi 'Logged in' terdeteksi.")
+                    except TimeoutException:
+                        print("DEBUG: Notifikasi 'Logged in' tidak terdeteksi (mungkin fleeting atau sudah menghilang).")
+
+                    # 3. Modal QR code menghilang (Verifikasi Penting)
+                    print("Menunggu modal QR code menghilang...")
+                    WebDriverWait(driver, 30).until( # Cukup waktu untuk modal hilang setelah scanned/redirect
                         EC.invisibility_of_element_located((By.CSS_SELECTOR, '[data-e2e="qr-code"]'))
                     )
-                    print("Modal QR code telah menghilang. Login di HP kemungkinan berhasil.")
+                    print("Modal QR code telah menghilang.")
 
-                    # Setelah modal menghilang, baru verifikasi pengalihan ke URL profil.
-                    # Ini seharusnya terjadi cukup cepat setelah modal hilang.
-                    print(f"Memverifikasi redirect ke URL profil: {target_url} (maks 60 detik)...")
-                    WebDriverWait(driver, 60).until( 
-                        EC.url_to_be(target_url)
+                    # 4. Redirect ke URL profil (Verifikasi Penting)
+                    print(f"Memverifikasi redirect ke URL profil: {target_url_base}...")
+                    WebDriverWait(driver, 30).until( # Cukup waktu untuk redirect
+                        EC.url_contains(target_url_base)
                     )
                     print("Berhasil dialihkan ke halaman profil.")
 
-                    # Debugging/Logging: Coba cek teks "QR code scanned" jika perlu, tapi jangan sampai menghentikan proses
-                    try:
-                        scanned_text_element = driver.find_element(By.XPATH, "//p[text()='QR code scanned']")
-                        if scanned_text_element.is_displayed():
-                            print("DEBUG: Teks 'QR code scanned' sempat terdeteksi.")
-                    except NoSuchElementException:
-                        print("DEBUG: Teks 'QR code scanned' tidak terdeteksi (mungkin fleeting atau tidak dirender di headless).")
-                    
-                    login_successful = True
+                    # Jika semua pengecekan di dalam try block ini berhasil, maka login memang sukses
                     print(f"Login QR code berhasil untuk user {user_id}. Berhasil dialihkan ke halaman profil.")
-                    break 
-                except TimeoutException:
-                    # Jika modal tidak hilang atau URL tidak berubah dalam waktu yang ditentukan, berarti login belum berhasil.
-                    print(f"Login belum dikonfirmasi (modal tidak hilang / URL tidak berubah) dalam {QR_REGENERATE_INTERVAL} detik. Mencoba me-regenerate QR code. Waktu berlalu total: {int(time.time() - start_time)}s.")
+                    break # Keluar dari loop utama karena login berhasil
+
+                except TimeoutException as te:
+                    # Jika "QR code scanned" atau indikator penting lainnya tidak terdeteksi dalam timeout-nya
+                    print(f"Timeout deteksi login ({te}). Login belum dikonfirmasi oleh indikator utama. Waktu berlalu: {int(current_time - start_time)}s. Mencoba lagi.")
+                    time.sleep(RECHECK_INTERVAL) # Tidur sebentar sebelum iterasi berikutnya
+                    continue # Lanjutkan loop
+
                 except WebDriverException as we:
                     print(f"WebDriver ERROR saat menunggu login konfirmasi untuk user {user_id}: {we}. Mencoba me-refresh halaman atau driver.")
                     try:
-                        driver.get(target_url) 
+                        driver.get(target_url)
                         time.sleep(5)
                     except Exception as nav_e:
                         print(f"Gagal me-refresh halaman setelah WebDriver error: {nav_e}. Driver mungkin rusak.")
-                        raise nav_e 
+                        raise nav_e
 
             if login_successful:
                 user.cookies_json = json.dumps(driver.get_cookies())
                 db.session.add(user)
                 db.session.commit()
                 print(f"Cookies berhasil disimpan ke database untuk user {user_id}.")
-                return True 
+                return True
             else:
-                print(f"Login gagal setelah {MAX_LOGIN_WAIT_TIME/60} menit menunggu untuk user {user_id}.")
+                print(f"Login gagal setelah {MAX_LOGIN_WAIT_TIME/20} menit menunggu untuk user {user_id}.")
                 if os.path.exists(qr_image_path):
                     os.remove(qr_image_path)
                 return False
