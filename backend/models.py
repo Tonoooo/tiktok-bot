@@ -45,4 +45,4 @@ class ProcessedVideo(db.Model):
     processed_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False) # Kapan terakhir diproses
 
     def __repr__(self):
-        return f'<ProcessedVideo {self.video_url[:50]}...>'
+        return f'<ProcessedVideo {self.video_url}>'

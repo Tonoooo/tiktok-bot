@@ -5,6 +5,13 @@ import threading
 import os 
 import json 
 
+import sys
+# BARU: Secara eksplisit tambahkan direktori proyek ke sys.path
+# Ini memastikan Python dapat menemukan 'backend' sebagai paket.
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
+if project_root not in sys.path:
+    sys.path.append(project_root)
+    
 from backend.models import db, User, ProcessedVideo
 from akses_komen.bot import run_tiktok_bot_task 
 
