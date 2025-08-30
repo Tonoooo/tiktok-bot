@@ -22,15 +22,15 @@ def _open_tiktok_qr_modal(driver):
     try:
         print("Mencoba mendeteksi modal 'chose your interest'...")
         # MEMPERBARUI: Meningkatkan timeout untuk stabilitas
-        modal_interest_button = WebDriverWait(driver, 15).until( # Ditingkatkan dari 10 menjadi 15
+        modal_interest_button = WebDriverWait(driver, 5).until( 
             EC.presence_of_element_located((By.CSS_SELECTOR, '[data-e2e="bottom-login"]'))
         )
         modal_interest_button.click()
         print("Tombol 'log in' di modal 'chose your interest' diklik.")
-        time.sleep(5)
+        time.sleep(2)
 
         # MEMPERBARUI: Meningkatkan timeout untuk stabilitas
-        qr_button_interest = WebDriverWait(driver, 15).until( # Ditingkatkan dari 10 menjadi 15
+        qr_button_interest = WebDriverWait(driver, 3).until( 
             EC.element_to_be_clickable((By.XPATH, "//div[@role='link' and .//div[text()='Use QR code']]"))
         )
         qr_button_interest.click()
@@ -41,7 +41,7 @@ def _open_tiktok_qr_modal(driver):
         print(f"Modal 'chose your interest' atau QR button tidak ditemukan, mencoba alur 'Ikuti'. Error: {e}")
         try:
             # MEMPERBARUI: Meningkatkan timeout untuk stabilitas
-            follow_button = WebDriverWait(driver, 10).until( 
+            follow_button = WebDriverWait(driver, 3).until( 
                 EC.element_to_be_clickable((By.CSS_SELECTOR, '[data-e2e="follow-button"]'))
             )
             follow_button.click()
@@ -49,7 +49,7 @@ def _open_tiktok_qr_modal(driver):
             time.sleep(3)
 
             # MEMPERBARUI: Meningkatkan timeout untuk stabilitas
-            qr_button = WebDriverWait(driver, 15).until( # Ditingkatkan dari 10 menjadi 15
+            qr_button = WebDriverWait(driver, 2).until( 
                 EC.element_to_be_clickable((By.XPATH, "//div[@role='link' and .//div[text()='Use QR code']]"))
             )
             qr_button.click()
@@ -70,10 +70,10 @@ def generate_qr_and_wait_for_login(user_id: int, app_instance: Flask):
 
     try:
         options = uc.ChromeOptions()
-        # options.add_argument('--headless') # Jalankan browser tanpa GUI
-        # options.add_argument('--disable-gpu') # Diperlukan untuk headless di beberapa sistem
-        # options.add_argument('--no-sandbox') # Diperlukan untuk headless di Linux server
-        # options.add_argument('--disable-dev-shm-usage') # Mengatasi masalah resource di Docker/VPS
+        options.add_argument('--headless') # Jalankan browser tanpa GUI
+        options.add_argument('--disable-gpu') # Diperlukan untuk headless di beberapa sistem
+        options.add_argument('--no-sandbox') # Diperlukan untuk headless di Linux server
+        options.add_argument('--disable-dev-shm-usage') # Mengatasi masalah resource di Docker/VPS
         
         driver = uc.Chrome(options=options)
         print(f"WebDriver berhasil diinisialisasi untuk user {user_id} (headless).") 
@@ -91,7 +91,7 @@ def generate_qr_and_wait_for_login(user_id: int, app_instance: Flask):
             else:
                 driver.get(target_url)
 
-            time.sleep(5) # Tambahkan jeda awal lebih lama setelah navigasi untuk stabilitas halaman
+            time.sleep(3) # Tambahkan jeda awal lebih lama setelah navigasi untuk stabilitas halaman
 
             # Awalnya, picu modal QR code
             if not _open_tiktok_qr_modal(driver):
@@ -106,7 +106,7 @@ def generate_qr_and_wait_for_login(user_id: int, app_instance: Flask):
                 EC.presence_of_element_located(qr_element_locator) 
             )
             print(f"Elemen QR code (canvas) terdeteksi untuk user {user_id}.")
-            time.sleep(3) # Jeda untuk rendering visual yang stabil
+            time.sleep(3) 
 
             # Ambil screenshot QR code awal (yang pertama kali muncul)
             qr_data_url = driver.execute_script("return arguments[0].toDataURL('image/png');", qr_canvas_element)
@@ -198,6 +198,16 @@ def generate_qr_and_wait_for_login(user_id: int, app_instance: Flask):
                         EC.url_contains(target_url_base)
                     )
                     print("Berhasil dialihkan ke halaman profil.")
+                    
+                    # PRIORITAS UTAMA 5: Deteksi tombol profil user (indikator kuat setelah redirect)
+                    print("Menunggu tombol profil user muncul (indikator login berhasil)...")
+                    # Kita cari tombol dengan atribut aria-haspopup="dialog" yang berisi gambar avatar
+                    profile_button_locator = (By.CSS_SELECTOR, 'button[aria-haspopup="dialog"] img[class*="ImgAvatar"]')
+                    WebDriverWait(driver, 30).until(
+                        EC.presence_of_element_located(profile_button_locator)
+                    )
+                    print("Tombol profil user (avatar) terdeteksi. Login berhasil dikonfirmasi.")
+                    
 
                     # Jika semua pengecekan di dalam try block ini berhasil, maka login memang sukses
                     print(f"Login QR code berhasil untuk user {user_id}. Berhasil dialihkan ke halaman profil.")
