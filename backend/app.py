@@ -447,6 +447,8 @@ def save_processed_video_api():
         return jsonify({"message": f"Error saving/updating video transcript: {e}"}), 500
 
 # Endpoint untuk bot lokal mengupload gambar QR ke VPS
+# ... existing code ...
+
 @app.route('/api/upload_qr_image/<int:user_id>', methods=['POST'])
 def upload_qr_image_api(user_id):
     """
@@ -465,6 +467,54 @@ def upload_qr_image_api(user_id):
         file.save(file_path)
         return jsonify({"message": "QR image uploaded successfully", "filename": filename}), 200
     return jsonify({"message": "Failed to upload QR image"}), 500
+
+# BARU: Endpoint untuk bot worker mengambil daftar user aktif yang perlu diproses
+@app.route('/api/active_users_for_bot', methods=['GET'])
+def get_active_users_for_bot():
+    """
+    Mengembalikan daftar user ID yang aktif dan perlu diproses oleh bot worker.
+    Membutuhkan API Key.
+    """
+    try:
+        current_time = datetime.now()
+        # Ambil semua user yang aktif
+        active_users = User.query.filter_by(is_active=True).all()
+        
+        users_to_process = []
+        for user in active_users:
+            # Perhitungan sederhana untuk menentukan apakah user perlu diproses:
+            # 1. Jika belum pernah jalan (last_run_at is None)
+            # 2. Jika daily_run_count > 0 DAN sudah melewati interval yang ditentukan
+            
+            should_process = False
+            
+            if not user.last_run_at:
+                should_process = True
+            elif user.daily_run_count > 0:
+                # Hitung interval per jalankan
+                # Contoh: jika daily_run_count=3, berarti setiap 8 jam
+                interval_hours = 24 / user.daily_run_count
+                next_run_time = user.last_run_at + timedelta(hours=interval_hours)
+                
+                if current_time >= next_run_time:
+                    should_process = True
+            
+            if should_process:
+                # Hanya tambahkan jika tiktok_username ada, karena bot tidak bisa jalan tanpa ini
+                if user.tiktok_username:
+                    users_to_process.append({
+                        "user_id": user.id,
+                        "tiktok_username": user.tiktok_username,
+                        "last_run_at": user.last_run_at.isoformat() if user.last_run_at else None,
+                        "next_run_estimate": (user.last_run_at + timedelta(hours=24 / user.daily_run_count)).isoformat() if user.last_run_at and user.daily_run_count > 0 else "N/A"
+                    })
+                else:
+                    print(f"Peringatan: User {user.id} aktif tetapi tidak memiliki tiktok_username. Melewati.")
+
+        return jsonify({"users": users_to_process}), 200
+    except Exception as e:
+        print(f"ERROR: Gagal mengambil daftar user aktif untuk bot: {e}")
+        return jsonify({"message": f"Error fetching active users for bot: {e}"}), 500
 
 if __name__ == '__main__':
     print(f"Aplikasi Flask akan menggunakan database di: {db_path}") 
