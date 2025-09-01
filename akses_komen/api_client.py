@@ -8,7 +8,7 @@ class APIClient:
         Menginisialisasi APIClient untuk berkomunikasi dengan Flask API.
         
         Args:
-            base_url (str): URL dasar API Flask (contoh: "http://103.52.114.253:5000").
+            base_url (str): URL dasar API Flask (contoh: "http://8.215.13.101:5000").
             api_key (str): Kunci API untuk otentikasi bot ke Flask API.
         """
         self.base_url = base_url
