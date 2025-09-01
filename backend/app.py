@@ -48,7 +48,7 @@ def load_user(user_id):
 # ===============================================
 # API Key sederhana yang akan digunakan oleh bot lokal Anda untuk otentikasi
 # Dalam produksi, gunakan metode yang lebih aman (mis. token JWT, manajemen API key yang lebih baik)
-API_BOT_KEY = "botyangdijalankanlokal30082025" # GANTI DENGAN KUNCI YANG LEBIH AMAN!
+API_BOT_KEY = "super_secret_bot_key_123" # GANTI DENGAN KUNCI YANG LEBIH AMAN!
 
 @app.before_request
 def api_key_auth():
