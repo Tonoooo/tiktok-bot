@@ -1,6 +1,7 @@
 import requests
 import json
 from typing import Dict, Any, Optional
+import os
 
 class APIClient:
     def __init__(self, base_url: str, api_key: str):
@@ -83,4 +84,37 @@ class APIClient:
         }
         return self._make_request("POST", "api/processed_videos", data)
 
+    def update_user_last_run_api(self, user_id: int) -> Dict[str, Any]:
+        """
+        Memperbarui timestamp last_run_at untuk user tertentu melalui API Flask.
+        """
+        print(f"Memperbarui last_run_at untuk user {user_id} melalui API...")
+        return self._make_request("POST", f"api/users/{user_id}/last_run")
+
+    def upload_qr_image_to_vps(self, user_id: int, image_path: str):
+        """
+        Mengupload gambar QR code dari lokal ke VPS agar bisa diakses oleh frontend.
+        Metode ini dipindahkan ke APIClient untuk konsistensi.
+        """
+        print(f"Mengupload gambar QR code untuk user {user_id} ke VPS melalui APIClient...")
+        try:
+            with open(image_path, 'rb') as f:
+                files = {'file': (os.path.basename(image_path), f, 'image/png')}
+                # Pastikan API_BOT_KEY disertakan di headers
+                response = requests.post(f"{self.base_url}/api/upload_qr_image/{user_id}", 
+                                         headers={"X-API-Key": self.api_key}, 
+                                         files=files)
+                response.raise_for_status()
+                print(f"Gambar QR code untuk user {user_id} berhasil diupload ke VPS.")
+                return response.json()
+        except requests.exceptions.RequestException as e:
+            print(f"ERROR: Gagal mengupload gambar QR code untuk user {user_id} ke VPS: {e}")
+            raise # Re-raise the exception after logging
+
+    def get_active_users_for_bot(self) -> Dict[str, Any]:
+        """
+        Mengambil daftar user ID yang aktif dan perlu diproses oleh bot worker dari API Flask.
+        """
+        print("Mengambil daftar user aktif untuk bot dari API...")
+        return self._make_request("GET", "api/active_users_for_bot")
     # Metode lain seperti untuk melaporkan komentar yang dibalas bisa ditambahkan di sini.

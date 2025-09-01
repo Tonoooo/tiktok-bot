@@ -50,12 +50,12 @@ with app.app_context():
     hashed_password = generate_password_hash("password_aman")
 
     # Cek apakah user sudah ada untuk mencegah duplikasi jika script dijalankan berkali-kali
-    if not User.query.filter_by(username='cozy_kilo').first():
+    if not User.query.filter_by(username='sueptono7').first():
         user1 = User(
-            username='cozy_kilo', 
-            email='cozy_kilo@gmail.com', 
+            username='sueptono7', 
+            email='sueptono7@gmail.com', 
             password_hash=hashed_password,
-            tiktok_username='cozy_kilo', # Digabung dari CreatorSettings
+            tiktok_username='sueptono7', # Digabung dari CreatorSettings
             creator_character_description='pria, usia 20-an, tegas, suka humor, sering menggunakan kata "mantap"', # Digabung
             is_active=True, # Digabung
             daily_run_count=0, # Digabung
@@ -64,18 +64,18 @@ with app.app_context():
         )
         db.session.add(user1)
         db.session.commit() # Commit user dulu untuk mendapatkan ID
-        print("User 'cozy_kilo' (dengan pengaturan creator) ditambahkan.")
+        print("User 'sueptono7' (dengan pengaturan creator) ditambahkan.")
     else:
-        user1 = User.query.filter_by(username='cozy_kilo').first()
-        print("User 'cozy_kilo' sudah ada.")
+        user1 = User.query.filter_by(username='sueptono7').first()
+        print("User 'sueptono7' sudah ada.")
 
     # --- Contoh data ProcessedVideo (Opsional, untuk testing) ---
     # Jika Anda ingin menambahkan contoh video yang sudah diproses secara manual
     # Uncomment blok di bawah ini dan sesuaikan
-    # if not ProcessedVideo.query.filter_by(video_url='https://www.tiktok.com/@cozy_kilo/video/12345').first():
+    # if not ProcessedVideo.query.filter_by(video_url='https://www.tiktok.com/@sueptono7/video/12345').first():
     #     sample_video = ProcessedVideo(
     #         user_id=user1.id,
-    #         video_url='https://www.tiktok.com/@cozy_kilo/video/12345',
+    #         video_url='https://www.tiktok.com/@sueptono7/video/12345',
     #         transcript='Ini adalah contoh transkrip video.',
     #         processed_at=datetime.utcnow()
     #     )

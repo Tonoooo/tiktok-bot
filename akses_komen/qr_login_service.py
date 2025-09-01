@@ -91,38 +91,11 @@ def generate_qr_and_wait_for_login(user_id: int, api_client: APIClient):
         # STEALTH HEADLESS OPTIONS
         # =========================
         options = uc.ChromeOptions()
-        # PERUBAHAN PENTING: Untuk komputer lokal Anda, kita akan jalankan dalam mode non-headless
-        # Karena Anda menyebutkan ingin deteksi QR code scanned lebih andal.
-        # Jika Anda ingin tetap headless, uncomment baris ini:
-        # options.add_argument('--headless=new')               # headless generasi baru (lebih mirip headful)
-        options.add_argument('--disable-gpu') # Tetap disarankan
-        options.add_argument('--no-sandbox') # Tetap disarankan untuk Linux
-        options.add_argument('--disable-dev-shm-usage') # Tetap disarankan untuk Linux/Docker
-        options.add_argument('--window-size=1280,800')       # viewport realistis
-        options.add_argument('--disable-blink-features=AutomationControlled')
-        # (opsional) spoof UA agar konsisten dengan desktop normal
-        options.add_argument(
-            '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
-            'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36'
-        )
-        # Tambahan opsi untuk menghindari deteksi
-        # options.add_experimental_option("excludeSwitches", ["enable-automation"]) # Dihapus karena error sebelumnya
-        # options.add_experimental_option('useAutomationExtension', False) # Dihapus karena error sebelumnya
-        options.add_argument('--disable-setuid-sandbox')
-        options.add_argument('--lang=en-US,en;q=0.9') # Mengatur bahasa browser ke Inggris AS
-
+        # options.add_argument('--headless') # Jalankan browser tanpa GUI
+        # options.add_argument('--disable-gpu') # Diperlukan untuk headless di beberapa sistem
+        # options.add_argument('--no-sandbox') # Diperlukan untuk headless di Linux server
+        # options.add_argument('--disable-dev-shm-usage') # Mengatasi masalah resource di Docker/VPS
         driver = uc.Chrome(options=options)
-
-        # Sembunyikan navigator.webdriver = undefined
-        driver.execute_cdp_cmd(
-            "Page.addScriptToEvaluateOnNewDocument",
-            {"source": "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"}
-        )
-        # (opsional) aktifkan Network untuk debugging/observasi request-respons
-        try:
-            driver.execute_cdp_cmd("Network.enable", {})
-        except Exception:
-            pass
 
         print(f"WebDriver berhasil diinisialisasi untuk user {user_id} (non-headless lokal).") 
 
@@ -141,7 +114,7 @@ def generate_qr_and_wait_for_login(user_id: int, api_client: APIClient):
         else:
             driver.get(target_url)
 
-        time.sleep(10) # Tambahkan jeda awal lebih lama setelah navigasi untuk stabilitas halaman
+        time.sleep(3) # Tambahkan jeda awal lebih lama setelah navigasi untuk stabilitas halaman
 
         # Awalnya, picu modal QR code
         if not _open_tiktok_qr_modal(driver):
@@ -168,11 +141,11 @@ def generate_qr_and_wait_for_login(user_id: int, api_client: APIClient):
             print(f"QR code awal disimpan ke: {qr_image_path}")
 
         login_successful = False
-        MAX_LOGIN_WAIT_TIME = 600 # detik (total 10 menit)
+        MAX_LOGIN_WAIT_TIME = 300 # detik (total 5 menit)
         RECHECK_INTERVAL = 5 # detik, untuk cek status
 
         # Interval dan waktu terakhir untuk mengambil screenshot QR code
-        QR_SCREENSHOT_INTERVAL = 20 # detik
+        QR_SCREENSHOT_INTERVAL = 15 # detik
         last_screenshot_time = time.time()
 
         start_time = time.time()
@@ -211,44 +184,45 @@ def generate_qr_and_wait_for_login(user_id: int, api_client: APIClient):
 
             # --- Deteksi Login Berhasil (indikator yang lebih andal) ---
             try:
-                # Sinyal Awal (Opsional, untuk debugging): Deteksi tampilan "QR code scanned" overlay
-                try:
-                    print("DEBUG: Mencoba mendeteksi tampilan 'QR code scanned' overlay (maks 5 detik)...")
-                    scanned_overlay_locator = (By.CSS_SELECTOR, '[data-e2e="qr-code"] .css-n2w5z3-DivCodeMask')
-                    WebDriverWait(driver, 5).until( # Waktu tunggu singkat untuk deteksi fleeting
-                        EC.presence_of_element_located(scanned_overlay_locator)
-                    )
-                    print("DEBUG: Tampilan 'QR code scanned' overlay terdeteksi.")
-                except TimeoutException:
-                    pass # Lewati jika tidak terdeteksi, ini hanya debug
+                # 1. Deteksi tampilan "QR code scanned" overlay
+                # Ini adalah indikator prioritas utama Anda, kita akan coba deteksi ini secara agresif
+                # Timeout 60 detik karena Anda bilang tampilannya bisa bertahan sampai 1 menit
+                print("Menunggu tampilan 'QR code scanned' overlay (maks 60 detik)...")
+                scanned_overlay_locator = (By.CSS_SELECTOR, '[data-e2e="qr-code"] .css-n2w5z3-DivCodeMask')
+                WebDriverWait(driver, 60).until( 
+                    EC.presence_of_element_located(scanned_overlay_locator)
+                )
+                print("Tampilan 'QR code scanned' overlay terdeteksi.")
                 
-                # Sinyal Awal (Opsional, untuk debugging): Deteksi notifikasi "Logged in"
+                # Jika overlay scanned terdeteksi, langsung anggap login sukses dan verifikasi final
+                login_successful = True # Set flag to True early
+                
+                # 2. Notifikasi "Logged in" (opsional, untuk debugging/logging saja, tidak akan memblokir)
                 try:
-                    print("DEBUG: Mencoba mendeteksi notifikasi 'Logged in' (maks 5 detik)...")
+                    print("Menunggu notifikasi 'Logged in' (opsional)...")
                     logged_in_toast_locator = (By.XPATH, "//div[@role='alert']/span[text()='Logged in']")
                     WebDriverWait(driver, 5).until( # Sangat cepat menghilang
                         EC.presence_of_element_located(logged_in_toast_locator)
                     )
-                    print("DEBUG: Notifikasi 'Logged in' terdeteksi.")
+                    print("Notifikasi 'Logged in' terdeteksi.")
                 except TimeoutException:
-                    pass # Lewati jika tidak terdeteksi, ini hanya debug
+                    print("DEBUG: Notifikasi 'Logged in' tidak terdeteksi (mungkin fleeting atau sudah menghilang).")
 
-
-                # PRIORITAS UTAMA 1: Modal QR code menghilang (indikator kuat bahwa QR sudah diproses)
-                print(f"Menunggu modal QR code menghilang (maks {MAX_LOGIN_WAIT_TIME - (time.time() - start_time)} detik tersisa)...")
-                WebDriverWait(driver, max(1, MAX_LOGIN_WAIT_TIME - (time.time() - start_time))).until( # Gunakan sisa waktu total
+                # 3. Modal QR code menghilang (Verifikasi Penting)
+                print("Menunggu modal QR code menghilang...")
+                WebDriverWait(driver, 30).until( # Cukup waktu untuk modal hilang setelah scanned/redirect
                     EC.invisibility_of_element_located((By.CSS_SELECTOR, '[data-e2e="qr-code"]'))
                 )
-                print("Modal QR code telah menghilang. Login di HP kemungkinan berhasil.")
+                print("Modal QR code telah menghilang.")
 
-                # PRIORITAS UTAMA 2: Redirect ke URL profil (konfirmasi final)
-                print(f"Memverifikasi redirect ke URL profil: {target_url_base} (maks 30 detik)...")
-                WebDriverWait(driver, 30).until( 
+                # 4. Redirect ke URL profil (Verifikasi Penting)
+                print(f"Memverifikasi redirect ke URL profil: {target_url_base}...")
+                WebDriverWait(driver, 30).until( # Cukup waktu untuk redirect
                     EC.url_contains(target_url_base)
                 )
                 print("Berhasil dialihkan ke halaman profil.")
-
-                # PRIORITAS UTAMA 3: Deteksi tombol profil user (indikator kuat setelah redirect)
+                
+                # PRIORITAS UTAMA 5: Deteksi tombol profil user (indikator kuat setelah redirect)
                 print("Menunggu tombol profil user muncul (indikator login berhasil)...")
                 # Kita cari tombol dengan atribut aria-haspopup="dialog" yang berisi gambar avatar
                 profile_button_locator = (By.CSS_SELECTOR, 'button[aria-haspopup="dialog"] img[class*="ImgAvatar"]')
@@ -257,9 +231,16 @@ def generate_qr_and_wait_for_login(user_id: int, api_client: APIClient):
                 )
                 print("Tombol profil user (avatar) terdeteksi. Login berhasil dikonfirmasi.")
                 
-                login_successful = True
+
+                # Jika semua pengecekan di dalam try block ini berhasil, maka login memang sukses
                 print(f"Login QR code berhasil untuk user {user_id}. Berhasil dialihkan ke halaman profil.")
                 break # Keluar dari loop utama karena login berhasil
+
+            except TimeoutException as te:
+                # Jika "QR code scanned" atau indikator penting lainnya tidak terdeteksi dalam timeout-nya
+                print(f"Timeout deteksi login ({te}). Login belum dikonfirmasi oleh indikator utama. Waktu berlalu: {int(current_time - start_time)}s. Mencoba lagi.")
+                time.sleep(RECHECK_INTERVAL) # Tidur sebentar sebelum iterasi berikutnya
+                continue # Lanjutkan loop
 
             except TimeoutException as te:
                 # Jika modal tidak hilang ATAU URL tidak berubah ATAU tombol profil tidak muncul dalam waktu yang ditentukan
