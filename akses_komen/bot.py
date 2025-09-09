@@ -71,15 +71,15 @@ def run_tiktok_bot_task(user_id: int, api_client: APIClient):
         # =========================
         options = uc.ChromeOptions()
         # options.add_argument('--headless=new') # DIKOMENTARI: Agar bot juga berjalan non-headless secara lokal
-        options.add_argument('--disable-gpu') # Diperlukan untuk headless di beberapa sistem
-        options.add_argument('--no-sandbox') # Diperlukan untuk headless di Linux server
-        options.add_argument('--disable-dev-shm-usage') # Mengatasi masalah resource di Docker/VPS
-        options.add_argument('--window-size=1280,800') # viewport realistis
-        options.add_argument('--disable-blink-features=AutomationControlled')
-        options.add_argument(
-            '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
-            'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36'
-        )
+        # options.add_argument('--disable-gpu') # Diperlukan untuk headless di beberapa sistem
+        # options.add_argument('--no-sandbox') # Diperlukan untuk headless di Linux server
+        # options.add_argument('--disable-dev-shm-usage') # Mengatasi masalah resource di Docker/VPS
+        # options.add_argument('--window-size=1280,800') # viewport realistis
+        # options.add_argument('--disable-blink-features=AutomationControlled')
+        # options.add_argument(
+        #     '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+        #     'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36'
+        # )
         options.add_argument('--disable-setuid-sandbox')
         options.add_argument('--lang=en-US,en;q=0.9') # Mengatur bahasa browser ke Inggris AS
         driver = uc.Chrome(options=options)
