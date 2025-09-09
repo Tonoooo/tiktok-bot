@@ -10,8 +10,13 @@ import json # Untuk menyimpan cookies_json dalam format JSON string kosong jika 
 # Konfigurasi Flask app untuk database
 app = Flask(__name__)
 
+# PERBAIKAN: Setel instance_path agar Flask tidak membuat folder 'instance' default.
+# Ini akan membuat site.db di lokasi yang sama dengan script ini (root proyek).
+project_root = os.path.abspath(os.path.dirname(__file__))
+app = Flask(__name__, instance_path=project_root)
+
 # Gunakan jalur absolut yang pasti menunjuk ke root proyek
-db_path = os.path.join(os.path.dirname(__file__), 'site.db')
+db_path = os.path.join(project_root, 'site.db')
 
 app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
