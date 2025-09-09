@@ -1,30 +1,30 @@
 import undetected_chromedriver as uc
 import time
-import pickle
-import os
-import re
-import json
-from selenium import webdriver
+import math # Tambahkan math import
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import TimeoutException, ElementClickInterceptedException, NoSuchElementException, StaleElementReferenceException
+from selenium.common.exceptions import TimeoutException, ElementClickInterceptedException, NoSuchElementException, StaleElementReferenceException, WebDriverException # Tambahkan WebDriverException
+import pickle # Dipertahankan untuk sementara jika ada logika yang masih menggunakannya
+import os
+import re
+import json
 from datetime import datetime
-from selenium.common.exceptions import WebDriverException
 
-import math
 # PERUBAHAN: Import APIClient dan get_video_transcript, generate_ai_reply
 from akses_komen.api_client import APIClient
 from akses_komen.transcription_service import get_video_transcript
 from akses_komen.llm_service import generate_ai_reply
 
-# BARU: Import db dan model User, ProcessedVideo
+# BARU: Import db dan model User, ProcessedVideo - DIHAPUS KARENA TIDAK DIGUNAKAN LAGI
 # from backend.models import db, User, ProcessedVideo 
 # from flask import Flask 
 
 
 # Custom Expected Condition untuk memeriksa atribut 'aria-disabled'
 class element_attribute_is(object):
+    """An expectation for checking if the given attribute of an element has a specific value.
+    This is useful for boolean attributes like 'aria-disabled'."""
     def __init__(self, locator, attribute, value):
         self.locator = locator
         self.attribute = attribute
@@ -33,8 +33,10 @@ class element_attribute_is(object):
     def __call__(self, driver):
         try:
             element = driver.find_element(*self.locator)
-            return element.get_attribute(self.attribute) == self.value
-        except StaleElementReferenceException:
+            if element.get_attribute(self.attribute) == self.value:
+                return element
+            return False
+        except:
             return False
 
 # PERUBAHAN: Fungsi utama bot sekarang menerima user_id dan api_client
@@ -42,7 +44,7 @@ def run_tiktok_bot_task(user_id: int, api_client: APIClient):
     print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Memulai tugas bot untuk user ID: {user_id}")
     driver = None
     
-    try:
+    try: # <--- AWALI DENGAN BLOK TRY UTAMA DI SINI
         # PERUBAHAN: Mengambil user settings dari APIClient
         user_settings = api_client.get_user_settings(user_id)
         if not user_settings:
@@ -68,11 +70,18 @@ def run_tiktok_bot_task(user_id: int, api_client: APIClient):
         # STEALTH HEADLESS OPTIONS
         # =========================
         options = uc.ChromeOptions()
-        # options.add_argument('--headless') # Jalankan browser tanpa GUI
-        # options.add_argument('--disable-gpu') # Diperlukan untuk headless di beberapa sistem
-        # options.add_argument('--no-sandbox') # Diperlukan untuk headless di Linux server
-        # options.add_argument('--disable-dev-shm-usage') # Mengatasi masalah resource di Docker/VPS
-
+        # options.add_argument('--headless=new') # DIKOMENTARI: Agar bot juga berjalan non-headless secara lokal
+        options.add_argument('--disable-gpu') # Diperlukan untuk headless di beberapa sistem
+        options.add_argument('--no-sandbox') # Diperlukan untuk headless di Linux server
+        options.add_argument('--disable-dev-shm-usage') # Mengatasi masalah resource di Docker/VPS
+        options.add_argument('--window-size=1280,800') # viewport realistis
+        options.add_argument('--disable-blink-features=AutomationControlled')
+        options.add_argument(
+            '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+            'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36'
+        )
+        options.add_argument('--disable-setuid-sandbox')
+        options.add_argument('--lang=en-US,en;q=0.9') # Mengatur bahasa browser ke Inggris AS
         driver = uc.Chrome(options=options)
         print("WebDriver berhasil diinisialisasi.")
 
@@ -100,73 +109,85 @@ def run_tiktok_bot_task(user_id: int, api_client: APIClient):
             driver.refresh()
             print("Cookies dimuat dan halaman direfresh.")
             time.sleep(5)
+
+            # Memverifikasi apakah login berhasil setelah memuat cookies
+            current_url_base = driver.current_url.split('?')[0]
+            target_url_base = target_url.split('?')[0]
+            if not (current_url_base == target_url_base or current_url_base.startswith(f"https://www.tiktok.com/@{tiktok_username}")):
+                print(f"Peringatan: Tidak berhasil mencapai halaman profil setelah loading cookies. URL saat ini: {driver.current_url}. Akan mencoba refresh lagi.")
+                driver.get(target_url) # Coba refresh lagi
+                time.sleep(5)
+                current_url_base = driver.current_url.split('?')[0]
+                if not (current_url_base == target_url_base or current_url_base.startswith(f"https://www.tiktok.com/@{tiktok_username}")):
+                    print("Gagal mencapai halaman profil setelah refresh kedua. Mungkin perlu login ulang. Mengakhiri tugas bot.")
+                    return # Jika tidak di halaman profil, bot tidak bisa melanjutkan
         else:
-            print("Tidak ada cookies untuk dimuat. Pastikan user sudah login via QR code sebelumnya.")
-            # return # Jika tidak ada cookies, bot tidak bisa lanjut. Logika ini akan ditangani di Worker.
-
-        # Memastikan berada di halaman profil
-        current_url_base = driver.current_url.split('?')[0]
-        target_url_base = target_url.split('?')[0]
-
-        if not (current_url_base == target_url_base or current_url_base.startswith(f"https://www.tiktok.com/@{tiktok_username}")):
-            print(f"Peringatan: Tidak berhasil mencapai halaman profil setelah loading cookies. URL saat ini: {driver.current_url}")
-            # return # Jika tidak di halaman profil, bot tidak bisa melanjutkan
-
+            print("Tidak ada cookies untuk dimuat. Pastikan user sudah login via QR code sebelumnya di worker.")
+            # Jika tidak ada cookies, worker seharusnya sudah memicu QR login. Jadi, ini seharusnya tidak terjadi di sini.
+            # Jika sampai di sini tanpa cookies, ada masalah di worker atau login gagal.
+            return
         print(f"Berhasil masuk ke halaman profil {tiktok_username}.")
 
-        # Scroll ke bawah untuk memuat semua video (hingga batas tertentu)
-        print("Mulai scroll profil untuk memuat video...")
+        max_videos_to_process_per_run = 15 # Didefinisikan di sini
+
+        # --- LANGKAH: GULIR HALAMAN PROFIL UNTUK MEMUAT SEMUA VIDEO ---
+        print(f"Mulai menggulir halaman profil {tiktok_username} untuk memuat semua video...")
+        # Elemen yang dapat digulir di halaman profil TikTok kemungkinan adalah body atau elemen konten utama
         profile_scrollable_element = driver.find_element(By.TAG_NAME, 'body') 
         last_profile_height = driver.execute_script("return arguments[0].scrollHeight", profile_scrollable_element)
-        scroll_attempts = 0
-        max_scroll_attempts = 10 # Batasi scroll untuk mencegah loop tak terbatas
-        
-        while scroll_attempts < max_scroll_attempts:
+        profile_scroll_attempts = 0
+        max_profile_scroll_attempts = 5 # Batasi scroll untuk mencegah loop tak terbatas
+
+        while profile_scroll_attempts < max_profile_scroll_attempts:
             driver.execute_script("arguments[0].scrollTo(0, arguments[0].scrollHeight);", profile_scrollable_element)
-            time.sleep(3) # Tingkatkan jeda sedikit
+            time.sleep(3) # Beri waktu untuk memuat konten baru
             new_profile_height = driver.execute_script("return arguments[0].scrollHeight", profile_scrollable_element)
             if new_profile_height == last_profile_height:
-                print(f"Tidak ada video baru yang dimuat setelah {scroll_attempts+1} scroll profil. Berhenti.")
+                print(f"Tidak ada video baru yang dimuat setelah {profile_scroll_attempts+1} scroll profil. Berhenti.")
                 break
             last_profile_height = new_profile_height
-            scroll_attempts += 1
-            print(f"Profil discroll {scroll_attempts} kali. Tinggi baru: {new_profile_height}")
+            profile_scroll_attempts += 1
+            print(f"Digulir profil {profile_scroll_attempts} kali. Tinggi baru: {new_profile_height}")
         print("Selesai menggulir halaman profil.")
-        
+
         # --- Kumpulkan semua URL video unik yang memenuhi kriteria setelah menggulir profil ---
         all_video_elements_after_scroll = []
         try:
-            # Coba selector yang lebih umum untuk item video di profil
+            # Selector yang lebih spesifik dan teruji dari bot-sebelum-dipisahkan.py
             all_video_elements_after_scroll = WebDriverWait(driver, 15).until(
-                EC.presence_of_all_elements_located((By.XPATH, "//div[starts-with(@data-e2e, 'user-post-item') and .//a[contains(@href, '/video/')]]"))
+                EC.presence_of_all_elements_located((By.XPATH, "//div[@data-e2e='user-post-item' and .//a[contains(@href, '/video/')]]"))
             )
             print(f"Ditemukan total {len(all_video_elements_after_scroll)} elemen video di DOM setelah scrolling.")
         except TimeoutException:
             print("Tidak ada elemen video yang valid dengan tautan video ditemukan dalam waktu yang ditentukan setelah scrolling. Mengakhiri proses.")
             all_video_elements_after_scroll = []
-        
+
         recent_unpinned_video_urls = []
-        max_videos_to_process_per_run = 15 # Didefinisikan di sini
+        seen_urls = set() # Digunakan untuk memastikan URL unik
         
         for video_item_element in all_video_elements_after_scroll:
             try:
                 video_link_element = video_item_element.find_element(By.CSS_SELECTOR, 'a[href*="/video/"]')
                 video_url = video_link_element.get_attribute('href')
                 
+                if not video_url or video_url in seen_urls:
+                    continue
+
                 is_pinned = False
                 try:
                     # Mencari badge pinned dengan teks "Pinned" atau "Disematkan"
-                    pinned_badge = video_item_element.find_element(By.XPATH, ".//div[contains(@data-e2e, 'video-card-badge') and (text()='Pinned' or text()='Disematkan')]")
+                    # Diperbarui untuk lebih robust
+                    pinned_badge = video_item_element.find_element(By.XPATH, ".//div[contains(@data-e2e, 'video-card-badge')]//*[contains(text(), 'Pinned') or contains(text(), 'Disematkan')]")
                     is_pinned = True
-                    print(f"   -> Video disematkan/Pinned ditemukan, melewati (URL: {video_url}).")
                 except NoSuchElementException:
                     pass # Bukan video pinned
-                    
                 if not is_pinned: 
-                    if video_url not in recent_unpinned_video_urls: # Hanya tambahkan URL unik
-                        recent_unpinned_video_urls.append(video_url)
-                        print(f"   -> Video non-disematkan ditambahkan ke antrean: {video_url}")
-                
+                    recent_unpinned_video_urls.append(video_url)
+                    seen_urls.add(video_url) # Tambahkan ke set URL yang sudah dilihat
+                    print(f"   -> Video non-disematkan ditambahkan ke antrean: {video_url}")
+                else:
+                    print(f"   -> Video disematkan/Pinned ditemukan, melewati (URL: {video_url}).")
+
             except NoSuchElementException:
                 print("   -> Peringatan: Tautan video tidak ditemukan dalam item video. Melewati.")
                 continue
@@ -174,8 +195,6 @@ def run_tiktok_bot_task(user_id: int, api_client: APIClient):
                 print("   -> StaleElementReferenceException saat mencari tautan video di pengumpulan awal. Melewati.")
                 continue
 
-        # Karena kita sudah mengumpulkan URL unik di loop di atas, kita tidak perlu seen_urls lagi di sini.
-        # Tinggal ambil 15 terbaru.
         videos_to_process_this_run = recent_unpinned_video_urls[:max_videos_to_process_per_run]
 
         if not videos_to_process_this_run:
@@ -200,17 +219,29 @@ def run_tiktok_bot_task(user_id: int, api_client: APIClient):
                     print(f"\n--- Memproses video: {video_url_to_process} (Upaya {video_retry_count}/{MAX_VIDEO_RETRIES}) ---")
 
                     try:
-                        # NAVIGASI LANGSUNG KE VIDEO UNTUK STABILITAS
-                        driver.get(video_url_to_process) 
-                        print(f"Langsung menavigasi ke URL video: {video_url_to_process}")
-                        time.sleep(5) # Beri waktu untuk video dimuat
+                        # PERUBAHAN KRUSIAL: Kembali ke halaman profil dan klik video
+                        driver.get(target_url) 
+                        print("Kembali ke halaman profil untuk re-fresh elemen dan klik video.")
+                        time.sleep(5) 
 
-                        # CEK VIDEO TIKTOK SHOP
-                        tiktok_shop_toast_selector = (By.XPATH, "//div[contains(@class, 'TUXTopToast-content') and (text()='View TikTok Shop videos in the TikTok app' or text()='Lihat video TikTok Shop di aplikasi TikTok')]")
+                        video_item_element_on_profile = WebDriverWait(driver, 15).until(
+                            EC.presence_of_element_located((By.XPATH, f"//div[@data-e2e='user-post-item']//a[@href='{video_url_to_process}']//ancestor::div[@data-e2e='user-post-item']"))
+                        )
+                        
+                        print(f"Mencoba mengklik video: {video_url_to_process}")
+                        WebDriverWait(driver, 15).until(
+                            EC.element_to_be_clickable(video_item_element_on_profile)
+                        )
+                        video_item_element_on_profile.click()
+                        print("Video terbaru berhasil diklik.")
+                        time.sleep(2) 
+
+                        # CEK VIDEO TIKTOK SHOP (dengan teks multi-bahasa)
+                        tiktok_shop_toast_selector = (By.XPATH, "//div[contains(@class, 'TUXTopToast-content') and (contains(text(), 'View TikTok Shop videos') or contains(text(), 'Lihat video TikTok Shop'))]")
                         is_tiktok_shop_video = False
                         try:
                             print("   -> Mencoba mendeteksi toast 'Lihat video TikTok Shop'...")
-                            WebDriverWait(driver, 5).until( # Tingkatkan timeout untuk deteksi toast
+                            WebDriverWait(driver, 5).until( 
                                 EC.presence_of_element_located(tiktok_shop_toast_selector)
                             )
                             print("   -> TOAST TIKTOK SHOP DITEMUKAN. Ini adalah video TikTok Shop.")
@@ -223,9 +254,9 @@ def run_tiktok_bot_task(user_id: int, api_client: APIClient):
                             video_process_successful = True 
                             continue 
 
-                        # --- Dapatkan Transkrip Video ---
-                        # PERBAIKAN: Ganti user.id dan app_instance dengan user_id dan api_client
+                        # --- Dapatkan Transkrip Video (dengan user_id dan api_client) ---
                         print(f"Mencoba mendapatkan transkrip untuk video: {video_url_to_process}")
+                        # PERBAIKAN: Gunakan user_id dan api_client
                         video_transcript = get_video_transcript(video_url_to_process, user_id, api_client) 
                         
                         if not video_transcript: 
@@ -238,6 +269,7 @@ def run_tiktok_bot_task(user_id: int, api_client: APIClient):
                         # --- PROSES KOMENTAR ---
                         print("Video terbuka. Menunggu komentar untuk dimuat dan memprosesnya...")
                         
+                        # Selector jumlah komentar (mendukung multi-bahasa)
                         comment_count_element_selector = (By.XPATH, "//div[contains(@class, 'DivTabItem') and (starts-with(text(), 'Comments (') or starts-with(text(), 'Komentar ('))]")
                         num_comments = 0
                         try: 
@@ -252,25 +284,27 @@ def run_tiktok_bot_task(user_id: int, api_client: APIClient):
 
                             if num_comments == 0:
                                 print("Tidak ada komentar pada video ini (jumlah = 0). Melewatkan balasan komentar.")
-                                raise StopIteration 
+                                raise StopIteration # Keluar dari try ini untuk melewatkan video
                             else:
                                 print("Komentar ditemukan, melanjutkan pemrosesan.")
                         except TimeoutException:
                             print("Tidak dapat menemukan elemen jumlah komentar dalam waktu yang ditentukan. Asumsi ada komentar dan melanjutkan.")
                         except ValueError:
                             print(f"Gagal mengurai jumlah komentar dari teks: '{comment_count_text}'. Melanjutkan tanpa jumlah pasti.")
-                        except StopIteration:
-                            pass 
+                        except StopIteration: # Tangkap StopIteration untuk melewatkan pemrosesan komentar
+                            video_process_successful = True
+                            continue # Lanjutkan ke video berikutnya
                         except Exception as e:
                             print(f"Error tak terduga saat membaca jumlah komentar: {e}. Melanjutkan tanpa jumlah pasti.")
 
-                        if num_comments > 0 or (num_comments == 0 and "Gagal mengurai" in locals().get('e', '')):
+                        if num_comments > 0 or (num_comments == 0 and "Gagal mengurai" in locals().get('comment_count_text', '')): # Jika ada komentar atau gagal parse
                             try: 
                                 WebDriverWait(driver, 10).until(
                                     EC.presence_of_element_located((By.CSS_SELECTOR, '[data-e2e="comment-level-1"]'))
                                 )
                                 print("Setidaknya satu komentar awal dimuat.")
 
+                                # Selector untuk panel komentar yang bisa digulir
                                 scrollable_comment_panel_selector = (By.CSS_SELECTOR, '.css-1qp5gj2-DivCommentListContainer') 
                                 
                                 try: 
@@ -280,24 +314,24 @@ def run_tiktok_bot_task(user_id: int, api_client: APIClient):
                                     print("Elemen scrollable komentar ditemukan.")
                                 except:
                                     print("Elemen scrollable komentar tidak ditemukan. Mencoba scroll body.")
-                                    scrollable_element = driver.find_element(By.TAG_NAME, 'body')
+                                    scrollable_element = driver.find_element(By.TAG_NAME, 'body') # Fallback ke body
 
                                 last_height = driver.execute_script("return arguments[0].scrollHeight", scrollable_element)
                                 scroll_attempts = 0
                                 
-                                initial_comments_on_load = 20 
-                                comments_per_scroll_load = 20
+                                initial_comments_on_load = 20 # Estimasi komentar yang dimuat saat awal
+                                comments_per_scroll_load = 20 # Estimasi komentar yang dimuat per scroll
 
                                 if num_comments > initial_comments_on_load:
                                     estimated_scrolls_needed = math.ceil((num_comments - initial_comments_on_load) / comments_per_scroll_load)
-                                    max_scroll_attempts = min(estimated_scrolls_needed, 50)
+                                    max_scroll_attempts_comments = min(estimated_scrolls_needed, 50) # Batasi maksimal 50 scroll
                                 else:
-                                    max_scroll_attempts = 0
+                                    max_scroll_attempts_comments = 0
 
                                 scroll_pause_time = 2
 
-                                print(f"Mulai menggulir komentar (diperkirakan {max_scroll_attempts} upaya)...")
-                                while scroll_attempts < max_scroll_attempts:
+                                print(f"Mulai menggulir komentar (diperkirakan {max_scroll_attempts_comments} upaya)...")
+                                while scroll_attempts < max_scroll_attempts_comments:
                                     driver.execute_script("arguments[0].scrollTop = arguments[0].scrollHeight;", scrollable_element)
                                     time.sleep(scroll_pause_time)
                                     new_height = driver.execute_script("return arguments[0].scrollHeight", scrollable_element)
@@ -310,12 +344,13 @@ def run_tiktok_bot_task(user_id: int, api_client: APIClient):
 
                                 print("Selesai menggulir komentar.")
                                 
+                                # Mengambil semua elemen komentar setelah scrolling
                                 all_comments_elements = driver.find_elements(By.CSS_SELECTOR, '.css-1i7ohvi-DivCommentItemContainer.eo72wou0')
                                 print(f"Total {len(all_comments_elements)} komentar ditemukan untuk diproses setelah scrolling.")
                                 
                                 comment_replied_in_video = False
                                 comments_processed_count_in_video = 0 
-                                max_comments_to_process_per_video = 50 
+                                max_comments_to_process_per_video = 50 # Batasi komentar per video
 
                                 for comment_element in all_comments_elements:
                                     if comments_processed_count_in_video >= max_comments_to_process_per_video:
@@ -324,8 +359,8 @@ def run_tiktok_bot_task(user_id: int, api_client: APIClient):
 
                                     comment_text = ""
                                     try:
-                                        # Selector yang lebih umum untuk teks komentar
-                                        comment_text_element = comment_element.find_element(By.CSS_SELECTOR, 'div[data-e2e^="comment-content-"]')
+                                        # Selector teks komentar dari bot-sebelum-dipisahkan.py
+                                        comment_text_element = comment_element.find_element(By.CSS_SELECTOR, '[data-e2e^="comment-level-"]')
                                         comment_text = comment_text_element.text
                                     except NoSuchElementException:
                                         print("Gagal mendapatkan teks komentar. Melewati.")
@@ -340,45 +375,48 @@ def run_tiktok_bot_task(user_id: int, api_client: APIClient):
                                     stripped_comment_text = re.sub(r'\s+', '', comment_text)
                                     if not any(char.isalnum() for char in stripped_comment_text):
                                         print("   -> Komentar hanya terdiri dari emoji. Melewati.")
-                                        continue
-                                    
-                                    # Filter 2: Cek apakah komentar berisi indikator foto/gambar
-                                    photo_indicators = ['[写真]', '[foto]', '[image]', '[photo]', '[gambar]'] # Tambahkan bahasa Indonesia
-                                    if any(indicator in comment_text.lower() for indicator in photo_indicators):
-                                        print("   -> Komentar berisi indikator foto/gambar. Melewati.")
+                                        comments_processed_count_in_video += 1
                                         continue
 
-                                    # Filter 3: Cek apakah komentar dibuat oleh Creator (Filter yang sudah ada)
+                                    # Filter 2: Cek apakah komentar berisi indikator foto/gambar (mendukung multi-bahasa)
+                                    photo_indicators = ['[写真]', '[foto]', '[image]', '[photo]', '[gambar]'] 
+                                    if any(indicator in comment_text.lower() for indicator in photo_indicators):
+                                        print("   -> Komentar berisi indikator foto/gambar. Melewati.")
+                                        comments_processed_count_in_video += 1
+                                        continue
+
+                                    # Filter 3: Cek apakah komentar dibuat oleh Creator
                                     is_creator_comment = False
                                     try:
-                                        # Perbaiki selector untuk badge creator
-                                        creator_badge = comment_element.find_element(By.XPATH, ".//span[contains(@data-e2e, 'comment-creator-badge') or contains(@class, 'DivCreatorBadge')]")
+                                        # Selector dari bot-sebelum-dipisahkan.py
+                                        creator_badge = comment_element.find_element(By.XPATH, ".//span[contains(@data-e2e, 'comment-creator-') and (text()='Creator' or text()='Pembuat')]")
                                         is_creator_comment = True
                                     except NoSuchElementException:
                                         pass
                                     
                                     if is_creator_comment:
                                         print("   -> Ini adalah komentar dari Creator. Melewati.")
+                                        comments_processed_count_in_video += 1
                                         continue
 
-                                    # Filter 4: Cek apakah komentar sudah dibalas oleh Creator (Filter yang sudah ada)
+                                    # Filter 4: Cek apakah komentar sudah dibalas oleh Creator
                                     has_creator_replied = False
                                     try:
-                                        # Selector untuk memverifikasi balasan dari creator
-                                        # Mencari div balasan yang berisi elemen yang menunjukkan itu adalah balasan creator
-                                        reply_content = comment_element.find_element(By.XPATH, ".//div[contains(@class, 'DivReplyContainer')]//div[contains(@class, 'DivCommentContentContainer')]")
-                                        # Dalam DivCommentContentContainer, cari teks "Anda" atau badge creator
-                                        reply_content.find_element(By.XPATH, ".//span[text()='Anda' or contains(@data-e2e, 'comment-creator-badge')]")
+                                        # Selector dari bot-sebelum-dipisahkan.py
+                                        reply_container = comment_element.find_element(By.CSS_SELECTOR, ".css-zn6r1p-DivReplyContainer") # Perbaiki class name
+                                        creator_reply = reply_container.find_element(By.XPATH, ".//div[contains(@class, 'DivCommentContentContainer')]//span[contains(@data-e2e, 'comment-creator-') or text()='Anda']") # Tambahkan 'Anda'
                                         has_creator_replied = True
                                     except NoSuchElementException:
                                         pass
 
                                     if has_creator_replied:
                                         print("   -> Komentar ini sudah dibalas oleh Creator. Melewati.")
+                                        comments_processed_count_in_video += 1
                                         continue
                                     
                                     print(f"   -> Lolos filter. Mencoba membalas komentar: '{comment_text}'")
                                     try: 
+                                        # Pastikan tidak ada elemen pengganggu sebelum klik tombol reply
                                         try: 
                                             WebDriverWait(driver, 2).until(
                                                 EC.invisibility_of_element_located((By.CSS_SELECTOR, '.css-3yeu18-DivTabMenuContainer.e1aa9wve0'))
@@ -387,15 +425,17 @@ def run_tiktok_bot_task(user_id: int, api_client: APIClient):
                                         except TimeoutException:
                                             print("   -> Elemen tab menu pengganggu tidak menjadi tidak terlihat dalam waktu yang ditentukan, melanjutkan.")
                                         
-                                        # Perbaiki selector tombol reply
-                                        answer_comment_button = comment_element.find_element(By.XPATH, ".//button[contains(@data-e2e, 'comment-action-reply')]")
+                                        # Perbaiki selector tombol reply dari bot-sebelum-dipisahkan.py
+                                        answer_comment_button = comment_element.find_element(By.CSS_SELECTOR, '[data-e2e^="comment-reply-"]')
                                         WebDriverWait(driver, 5).until(EC.element_to_be_clickable(answer_comment_button))
                                         answer_comment_button.click()
                                         print("   -> Tombol 'Jawab' berhasil diklik.")
                                         time.sleep(1)
                                         
+                                        # Bersihkan komentar untuk AI
                                         cleaned_comment_for_reply = re.sub(r'[^\U00000000-\U0000FFFF]', '', comment_text)
 
+                                        # Textbox balasan
                                         text_box = WebDriverWait(driver, 10).until(
                                             EC.presence_of_element_located((By.XPATH, "//div[@role='textbox' and @contenteditable='true']"))
                                         )
@@ -426,23 +466,21 @@ def run_tiktok_bot_task(user_id: int, api_client: APIClient):
                                                 comments_processed_count_in_video += 1
                                                 time.sleep(1)
                                                 continue 
-
                                             reply_text_to_send = ai_generated_reply_cleaned
                                         else:
                                             print("   -> Peringatan: Transkrip video tidak tersedia. Menggunakan balasan default.")
                                             reply_text_to_send = ":)"
-                                            
+                                                
                                         text_box.send_keys(reply_text_to_send)
                                         print(f"   -> Mengetik balasan AI: \"{reply_text_to_send}\"")
                                         time.sleep(1)
-                                        
+                                            
                                         post_button_selector = (By.XPATH, "//div[@role='button' and @aria-label='Post']") 
-
                                         WebDriverWait(driver, 10).until(
                                             element_attribute_is(post_button_selector, "aria-disabled", "false")
                                         )
                                         print("   -> Tombol 'Post' terdeteksi aktif secara logis (aria-disabled='false').")
-
+                                        # Handle kemungkinan elemen pengganggu sebelum klik Post
                                         interfering_element_selector = (By.CSS_SELECTOR, '.css-1ml20fp-DivTextContainer.e1hknyby2')
                                         try:
                                             WebDriverWait(driver, 2).until(
@@ -463,42 +501,41 @@ def run_tiktok_bot_task(user_id: int, api_client: APIClient):
                                         
                                     except TimeoutException as e:
                                         print(f"   -> Gagal berinteraksi dengan elemen balasan (timeout): {e}. Melewati balasan ini.")
-                                        # Tutup modal balasan jika timeout terjadi di tengah proses balasan
+                                        # Coba tutup modal jika timeout terjadi di tengah proses balasan
                                         try:
                                             cancel_button_in_modal = WebDriverWait(driver, 2).until(
                                                 EC.element_to_be_clickable((By.XPATH, "//div[@role=\'button\' and @aria-label=\'Cancel\']"))
                                             )
                                             cancel_button_in_modal.click()
                                             print("   -> Tombol \'Cancel\' di modal balasan diklik setelah timeout.")
-                                            WebDriverWait(driver, 5).until(EC.invisibility_of_element_located(text_box)) # Tunggu textbox hilang
+                                            WebDriverWait(driver, 5).until(EC.invisibility_of_element_located(text_box)) 
                                         except:
-                                            pass # Abaikan jika gagal menutup
+                                            pass 
                                     except ElementClickInterceptedException as e:
                                         print(f"   -> Tombol/text box terhalang: {e}. Melewati balasan ini.")
-                                        # Tutup modal balasan jika terhalang
+                                        # Coba tutup modal jika terhalang
                                         try:
                                             cancel_button_in_modal = WebDriverWait(driver, 2).until(
                                                 EC.element_to_be_clickable((By.XPATH, "//div[@role=\'button\' and @aria-label=\'Cancel\']"))
                                             )
                                             cancel_button_in_modal.click()
                                             print("   -> Tombol \'Cancel\' di modal balasan diklik setelah terhalang.")
-                                            WebDriverWait(driver, 5).until(EC.invisibility_of_element_located(text_box)) # Tunggu textbox hilang
+                                            WebDriverWait(driver, 5).until(EC.invisibility_of_element_located(text_box)) 
                                         except:
-                                            pass # Abaikan jika gagal menutup
+                                            pass 
                                     except Exception as e:
                                         print(f"   -> Terjadi error tak terduga saat membalas komentar: {e}. Melewati balasan ini.")
-                                        # Tutup modal balasan jika ada error tak terduga
+                                        # Coba tutup modal jika ada error tak terduga
                                         try:
                                             cancel_button_in_modal = WebDriverWait(driver, 2).until(
                                                 EC.element_to_be_clickable((By.XPATH, "//div[@role=\'button\' and @aria-label=\'Cancel\']"))
                                             )
                                             cancel_button_in_modal.click()
                                             print("   -> Tombol \'Cancel\' di modal balasan diklik setelah error tak terduga.")
-                                            WebDriverWait(driver, 5).until(EC.invisibility_of_element_located(text_box)) # Tunggu textbox hilang
+                                            WebDriverWait(driver, 5).until(EC.invisibility_of_element_located(text_box)) 
                                         except:
-                                            pass # Abaikan jika gagal menutup
-                                    comments_processed_count_in_video += 1
-                                        
+                                            pass 
+                                    
                                 if not comment_replied_in_video:
                                     print("Tidak ada komentar yang memenuhi kriteria filter untuk dibalas di video ini.")
 
@@ -506,39 +543,39 @@ def run_tiktok_bot_task(user_id: int, api_client: APIClient):
                                 print("Tidak ada komentar yang terlihat (initial load) pada video ini dalam waktu yang ditentukan. Melewatkan balasan komentar.")
                             except Exception as e:
                                 print(f"Terjadi error tak terduga saat memproses komentar (di luar loop balasan): {e}. Melewatkan balasan komentar.")
-
                         print("Selesai memproses komentar di video ini. Mencoba menutup video untuk kembali ke profil.")
                         try: 
-                            close_button_selector = (By.XPATH, "//button[@role='button' and @aria-label='Close']")
+                            # Selector tombol close video (mendukung multi-bahasa)
+                            close_button_selector = (By.XPATH, "//button[@role='button' and (@aria-label='Close' or @aria-label='Tutup')]")
                             close_button = WebDriverWait(driver, 10).until(
                                 EC.element_to_be_clickable(close_button_selector)
                             )
                             close_button.click()
                             print("Tombol 'Close' video berhasil diklik.")
                             time.sleep(5)
-                            WebDriverWait(driver, 10).until(EC.url_to_be(f"https://www.tiktok.com/@{tiktok_username}")) # Gunakan tiktok_username
+                            WebDriverWait(driver, 10).until(EC.url_to_be(target_url))
                             print("Berhasil kembali ke halaman profil.")
                         except TimeoutException as e:
                             print(f"Gagal menemukan atau mengklik tombol 'Close' video: {e}. Mungkin sudah di halaman profil atau ada masalah lain.")
-                            driver.get(f"https://www.tiktok.com/@{tiktok_username}") # Navigasi paksa ke profil
+                            driver.get(target_url) # Navigasi paksa ke profil
                             print("Melakukan navigasi paksa kembali ke halaman profil.")
                             time.sleep(5)
                         except Exception as e:
                             print(f"Terjadi error tak terduga saat menutup video: {e}.")
                         
-                        video_process_successful = True 
+                        video_process_successful = True # Setel ini menjadi True jika pemrosesan video berhasil
                     
                     except (WebDriverException, TimeoutException, ElementClickInterceptedException, StaleElementReferenceException) as e:
                         print(f"ERROR SAAT MEMPROSES VIDEO {video_url_to_process} (Upaya {video_retry_count}/{MAX_VIDEO_RETRIES}): {e}")
                         print("Mencoba me-refresh halaman profil dan menunggu sebelum mencoba lagi video yang sama...")
                         if driver:
                             try:
-                                driver.get(f"https://www.tiktok.com/@{tiktok_username}") # Refresh ke profil
+                                driver.get(target_url) # Refresh ke profil
                                 time.sleep(5)
                             except WebDriverException as nav_e:
                                 print(f"ERROR: Gagal menavigasi kembali ke profil setelah error: {nav_e}. Driver mungkin perlu diinisialisasi ulang.")
                                 if driver: driver.quit()
-                                driver = None 
+                                driver = None # Set driver ke None untuk memicu inisialisasi ulang
                                 time.sleep(5) 
                         else: 
                             print("Driver tidak aktif. Mencoba inisialisasi ulang.")
@@ -558,7 +595,7 @@ def run_tiktok_bot_task(user_id: int, api_client: APIClient):
 
                             try:
                                 driver = uc.Chrome(options=options)
-                                # # Sembunyikan navigator.webdriver = undefined
+                                # Sembunyikan navigator.webdriver = undefined (opsional, sudah dilakukan di inisialisasi utama)
                                 # driver.execute_cdp_cmd(
                                 #     "Page.addScriptToEvaluateOnNewDocument",
                                 #     {"source": "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"}
@@ -570,47 +607,28 @@ def run_tiktok_bot_task(user_id: int, api_client: APIClient):
                                 time.sleep(5)
                             except Exception as init_e:
                                 print(f"ERROR: Gagal inisialisasi driver pada retry video: {init_e}. Mengakhiri retry untuk video ini.")
-                                break 
+                                break # Keluar dari loop retry video
                         time.sleep(5) 
                     except Exception as e:
                         print(f"ERROR TAK TERDUGA SAAT MEMPROSES VIDEO {video_url_to_process} (Upaya {video_retry_count}/{MAX_VIDEO_RETRIES}): {e}")
-                        break 
+                        break # Keluar dari loop retry video
 
                 videos_processed_count += 1 
 
-            if not video_process_successful:
-                print(f"Video {video_url_to_process} gagal diproses setelah {MAX_VIDEO_RETRIES} upaya. Melewatkan.")
+                if not video_process_successful: # Jika setelah semua retry gagal
+                    print(f"Video {video_url_to_process} gagal diproses setelah {MAX_VIDEO_RETRIES} upaya. Melewatkan.")
 
-        print(f"Selesai memproses {videos_processed_count} video untuk {tiktok_username}.") # Ganti target_akun dengan tiktok_username
+        print(f"Selesai memproses {videos_processed_count} video untuk {tiktok_username}.") 
 
-        # BARU: Update last_run_at di database - Ganti dengan panggilan APIClient yang benar
-        # user.last_run_at = datetime.now() 
-        # db.session.add(user) 
-        # db.session.commit()
-        api_client.update_user_last_run_api(user_id) # Panggil metode APIClient yang benar
-        print(f"Waktu terakhir bot dijalankan untuk user ID: {user_id} diperbarui melalui API.") # Perbarui pesan log
+        api_client.update_user_last_run_api(user_id) 
+        print(f"Waktu terakhir bot dijalankan untuk user ID: {user_id} diperbarui melalui API.") 
 
-    except Exception as e: # <--- TANGKAP EXCEPTION DARI BLOK TRY UTAMA
-        print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] ERROR fatal saat menjalankan bot untuk user ID: {user_id}. Error: {e}") # Ganti target_akun
-    finally: # <--- BLOK FINALLY SEKARANG BERPASANGAN DENGAN TRY UTAMA
+    except Exception as e: 
+        print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] ERROR fatal saat menjalankan bot untuk user ID: {user_id}. Error: {e}") 
+    finally: 
         if driver:
             driver.quit()
-            print(f"Operasi selesai untuk user ID: {user_id}. Browser ditutup.") # Ganti target_akun
+            print(f"Operasi selesai untuk user ID: {user_id}. Browser ditutup.") 
         else:
-            print(f"Operasi selesai untuk user ID: {user_id}. Driver tidak diinisialisasi atau sudah ditutup.") # Ganti target_akun
-
-
-
-
-
-# PERUBAHAN: Hapus bagian ini karena bot akan dipanggil oleh worker
-# if __name__ == '__main__':
-#     # Ini hanya contoh bagaimana bot akan dipanggil secara lokal
-#     # di lingkungan pengembangan. Dalam produksi, ini akan dipanggil oleh worker.
-#     # user_id = 1
-#     # api_base_url = "http://localhost:5000" # Ganti dengan URL VPS Anda
-#     # api_key = "bot_secret_key" # Ganti dengan API Key yang sesuai
-
-#     # local_api_client = APIClient(api_base_url, api_key)
-#     # run_tiktok_bot_task(user_id, local_api_client)
-#     print("Script bot.py tidak berjalan secara langsung. Ini akan dipanggil oleh Worker.")
+            print(f"Operasi selesai untuk user ID: {user_id}. Driver tidak diinisialisasi atau sudah ditutup.")
+            
