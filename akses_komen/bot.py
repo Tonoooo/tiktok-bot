@@ -44,8 +44,8 @@ def run_tiktok_bot_task(user_id: int, api_client: APIClient):
     print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Memulai tugas bot untuk user ID: {user_id}")
     driver = None
     
-    try: # <--- AWALI DENGAN BLOK TRY UTAMA DI SINI
-        # PERUBAHAN: Mengambil user settings dari APIClient
+    try:
+        # --------------- Mengambil user settings dari APIClient ---------------
         user_settings = api_client.get_user_settings(user_id)
         if not user_settings:
             print(f"ERROR: User {user_id} tidak ditemukan di API atau gagal mengambil pengaturan.")
@@ -54,7 +54,7 @@ def run_tiktok_bot_task(user_id: int, api_client: APIClient):
         tiktok_username = user_settings.get('tiktok_username')
         creator_character_description = user_settings.get('creator_character_description', "")
         
-        # PERUBAHAN: Memuat cookies dari user_settings yang didapat dari API
+        # ------------- Memuat cookies dari user_settings yang didapat dari API -------------
         cookies_json = user_settings.get('cookies_json')
         if cookies_json:
             cookies = json.loads(cookies_json)
@@ -70,33 +70,39 @@ def run_tiktok_bot_task(user_id: int, api_client: APIClient):
         # STEALTH HEADLESS OPTIONS
         # =========================
         options = uc.ChromeOptions()
-        # options.add_argument('--headless=new') # DIKOMENTARI: Agar bot juga berjalan non-headless secara lokal
-        # options.add_argument('--disable-gpu') # Diperlukan untuk headless di beberapa sistem
-        # options.add_argument('--no-sandbox') # Diperlukan untuk headless di Linux server
-        # options.add_argument('--disable-dev-shm-usage') # Mengatasi masalah resource di Docker/VPS
-        # options.add_argument('--window-size=1280,800') # viewport realistis
-        # options.add_argument('--disable-blink-features=AutomationControlled')
-        # options.add_argument(
-        #     '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
-        #     'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36'
-        # )
+        options.add_argument('--headless') 
+        # options.add_argument('--disable-gpu') # Penting untuk kinerja dan rendering di beberapa sistem
+        # options.add_argument('--no-sandbox') # Penting untuk Linux/Docker
+        options.add_argument('--disable-dev-shm-usage') # Mengatasi masalah resource
+        # options.add_argument('--window-size=1280,800') # Tetapkan ukuran jendela yang realistis
+        options.add_argument('--disable-blink-features=AutomationControlled') # Anti-deteksi
+        options.add_argument(
+            '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+            'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36'
+        ) # User-Agent yang umum
         options.add_argument('--disable-setuid-sandbox')
         options.add_argument('--lang=en-US,en;q=0.9') # Mengatur bahasa browser ke Inggris AS
         driver = uc.Chrome(options=options)
         print("WebDriver berhasil diinisialisasi.")
 
-        # Sembunyikan navigator.webdriver = undefined
+        # Sembunyikan navigator.webdriver = undefined (anti-deteksi) DAN Spoof Page Visibility API
         # driver.execute_cdp_cmd(
         #     "Page.addScriptToEvaluateOnNewDocument",
-        #     {"source": "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"}
+        #     {"source": '''
+        #         Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+        #         // Spoof Page Visibility API untuk mencegah throttling di latar belakang
+        #         Object.defineProperty(document, 'hidden', {get: () => false});
+        #         Object.defineProperty(document, 'visibilityState', {get: () => 'visible'});
+        #     '''}
         # )
-        # try:
-        #     driver.execute_cdp_cmd("Network.enable", {})
-        # except Exception:
-        #     pass
+        # Maksimalkan jendela browser setelah launch untuk memaksa rendering penuh
+        # driver.maximize_window()
 
+
+        # Buka TikTok
         target_url = f"https://www.tiktok.com/@{tiktok_username}"
         driver.get(target_url)
+        print(f"Navigasi ke: {target_url}")
         time.sleep(5)
 
         # Muat cookies jika ada
@@ -110,7 +116,44 @@ def run_tiktok_bot_task(user_id: int, api_client: APIClient):
             print("Cookies dimuat dan halaman direfresh.")
             time.sleep(5)
 
+            videos_area_loaded_ok = False
+            for attempt in range(3): # Coba maksimal 3 kali untuk memuat area video
+                print(f"Memeriksa status area video di halaman profil (Percobaan {attempt + 1})...")
+                try:
+                    # Coba temukan error container 'Something Went Wrong' di area video
+                    error_container = WebDriverWait(driver, 5).until(
+                        EC.presence_of_element_located((By.CSS_SELECTOR, 'div.css-1w7vxma-5e6d46e3--DivErrorContainer'))
+                    )
+                    # Jika error container ditemukan, coba klik tombol Refresh di dalamnya
+                    refresh_button = error_container.find_element(By.CSS_SELECTOR, 'button.ebef5j00')
+                    
+                    print("Deteksi 'Something went wrong' di area video. Mengklik tombol Refresh.")
+                    driver.execute_script("arguments[0].click();", refresh_button) # Gunakan JS click untuk keandalan
+                    time.sleep(10) # Beri waktu untuk refresh dan memuat ulang area video
+                    # Loop akan mencoba lagi di iterasi berikutnya setelah refresh
+
+                except TimeoutException:
+                    # Jika error container tidak muncul dalam 5 detik, anggap area video sudah dimuat dengan baik
+                    print("Area video tampaknya dimuat dengan baik (tidak ada 'Something Went Wrong').")
+                    videos_area_loaded_ok = True
+                    break # Keluar dari loop jika tidak ada error
+                except NoSuchElementException:
+                    # Jika error container tidak ditemukan (misal, selector salah atau belum muncul),
+                    # anggap area video dimuat dengan baik
+                    print("Tidak ada elemen error 'Something Went Wrong' yang terdeteksi di area video. Menganggap area video dimuat.")
+                    videos_area_loaded_ok = True
+                    break
+                except Exception as ex:
+                    print(f"ERROR saat mencoba menangani 'Something Went Wrong' di area video: {ex}. Mencoba refresh manual.")
+                    driver.refresh() # Sebagai fallback jika ada error lain
+                    time.sleep(10) # Beri waktu setelah refresh
+            
+            if not videos_area_loaded_ok:
+                print("Gagal memuat area video setelah beberapa kali percobaan. Mengakhiri tugas bot.")
+                return # Bot berhenti di sini jika area video tidak dimuat dengan benar
+
             # Memverifikasi apakah login berhasil setelah memuat cookies
+            # Pemeriksaan ini tetap penting untuk memastikan bot berada di halaman profil yang benar secara keseluruhan.
             current_url_base = driver.current_url.split('?')[0]
             target_url_base = target_url.split('?')[0]
             if not (current_url_base == target_url_base or current_url_base.startswith(f"https://www.tiktok.com/@{tiktok_username}")):
@@ -123,8 +166,6 @@ def run_tiktok_bot_task(user_id: int, api_client: APIClient):
                     return # Jika tidak di halaman profil, bot tidak bisa melanjutkan
         else:
             print("Tidak ada cookies untuk dimuat. Pastikan user sudah login via QR code sebelumnya di worker.")
-            # Jika tidak ada cookies, worker seharusnya sudah memicu QR login. Jadi, ini seharusnya tidak terjadi di sini.
-            # Jika sampai di sini tanpa cookies, ada masalah di worker atau login gagal.
             return
         print(f"Berhasil masuk ke halaman profil {tiktok_username}.")
 
@@ -154,13 +195,18 @@ def run_tiktok_bot_task(user_id: int, api_client: APIClient):
         all_video_elements_after_scroll = []
         try:
             # Selector yang lebih spesifik dan teruji dari bot-sebelum-dipisahkan.py
-            all_video_elements_after_scroll = WebDriverWait(driver, 15).until(
+            # PERBAIKAN: Tunggu hingga setidaknya satu item video muncul untuk memastikan rendering
+            all_video_elements_after_scroll = WebDriverWait(driver, 20).until( # Tingkatkan timeout
                 EC.presence_of_all_elements_located((By.XPATH, "//div[@data-e2e='user-post-item' and .//a[contains(@href, '/video/')]]"))
             )
             print(f"Ditemukan total {len(all_video_elements_after_scroll)} elemen video di DOM setelah scrolling.")
         except TimeoutException:
             print("Tidak ada elemen video yang valid dengan tautan video ditemukan dalam waktu yang ditentukan setelah scrolling. Mengakhiri proses.")
-            all_video_elements_after_scroll = []
+            # PERBAIKAN: Jangan update last_run_at jika tidak ada video yang ditemukan
+            return # Keluar dari fungsi jika tidak ada video yang ditemukan
+        except Exception as e: # Tangani error lain saat menemukan video
+            print(f"ERROR: Terjadi kesalahan saat mengumpulkan elemen video: {e}. Mengakhiri proses.")
+            return # Keluar dari fungsi
 
         recent_unpinned_video_urls = []
         seen_urls = set() # Digunakan untuk memastikan URL unik
@@ -175,18 +221,24 @@ def run_tiktok_bot_task(user_id: int, api_client: APIClient):
 
                 is_pinned = False
                 try:
-                    # Mencari badge pinned dengan teks "Pinned" atau "Disematkan"
-                    # Diperbarui untuk lebih robust
-                    pinned_badge = video_item_element.find_element(By.XPATH, ".//div[contains(@data-e2e, 'video-card-badge')]//*[contains(text(), 'Pinned') or contains(text(), 'Disematkan')]")
+                    # PERBAIKAN: Selector untuk pinned badge yang lebih robust dan presisi
+                    # Jika teks 'Pinned' atau 'Disematkan' langsung ada di dalam div badge
+                    pinned_badge_element = video_item_element.find_element(By.XPATH, ".//div[@data-e2e='video-card-badge' and (contains(text(), 'Pinned') or contains(text(), 'Disematkan'))]")
                     is_pinned = True
+                    print(f"   -> Video disematkan/Pinned ditemukan, melewati (URL: {video_url}).") 
                 except NoSuchElementException:
-                    pass # Bukan video pinned
-                if not is_pinned: 
+                    # Jika teks tidak langsung di div, coba cari di dalam child element (misal span di dalam div)
+                    try:
+                        pinned_badge_element = video_item_element.find_element(By.XPATH, ".//div[@data-e2e='video-card-badge']//*[contains(text(), 'Pinned') or contains(text(), 'Disematkan')]")
+                        is_pinned = True
+                        print(f"   -> Video disematkan/Pinned ditemukan (fallback selector), melewati (URL: {video_url}).")
+                    except NoSuchElementException:
+                        pass # Bukan video pinned
+
+                if not is_pinned: # Hanya tambahkan jika BUKAN pinned
                     recent_unpinned_video_urls.append(video_url)
                     seen_urls.add(video_url) # Tambahkan ke set URL yang sudah dilihat
                     print(f"   -> Video non-disematkan ditambahkan ke antrean: {video_url}")
-                else:
-                    print(f"   -> Video disematkan/Pinned ditemukan, melewati (URL: {video_url}).")
 
             except NoSuchElementException:
                 print("   -> Peringatan: Tautan video tidak ditemukan dalam item video. Melewati.")
@@ -305,17 +357,16 @@ def run_tiktok_bot_task(user_id: int, api_client: APIClient):
                                 print("Setidaknya satu komentar awal dimuat.")
 
                                 # Selector untuk panel komentar yang bisa digulir
-                                scrollable_comment_panel_selector = (By.CSS_SELECTOR, '.css-1qp5gj2-DivCommentListContainer') 
+                                scrollable_comment_panel_selector = (By.CSS_SELECTOR, 'div[class*="DivCommentListContainer"]')
                                 
                                 try: 
-                                    scrollable_element = WebDriverWait(driver, 5).until(
+                                    scrollable_element = WebDriverWait(driver, 10).until( # Tingkatkan timeout
                                         EC.presence_of_element_located(scrollable_comment_panel_selector)
                                     )
-                                    print("Elemen scrollable komentar ditemukan.")
-                                except:
-                                    print("Elemen scrollable komentar tidak ditemukan. Mencoba scroll body.")
-                                    scrollable_element = driver.find_element(By.TAG_NAME, 'body') # Fallback ke body
-
+                                    print("Elemen scrollable komentar ditemukan (menggunakan class DivCommentListContainer).")
+                                except TimeoutException: # Ganti except umum dengan TimeoutException
+                                    print("Elemen scrollable komentar TIDAK ditemukan (menggunakan class DivCommentListContainer). Mencoba fallback ke body.")
+                                    scrollable_element = driver.find_element(By.TAG_NAME, 'body') # Fallback terakhir ke body
                                 last_height = driver.execute_script("return arguments[0].scrollHeight", scrollable_element)
                                 scroll_attempts = 0
                                 
@@ -345,7 +396,8 @@ def run_tiktok_bot_task(user_id: int, api_client: APIClient):
                                 print("Selesai menggulir komentar.")
                                 
                                 # Mengambil semua elemen komentar setelah scrolling
-                                all_comments_elements = driver.find_elements(By.CSS_SELECTOR, '.css-1i7ohvi-DivCommentItemContainer.eo72wou0')
+                                # Mencoba selector berdasarkan data-e2e atau struktur umum
+                                all_comments_elements = driver.find_elements(By.XPATH, "//div[@data-e2e='comment-item-container' or contains(@class, 'DivCommentItemContainer')]")
                                 print(f"Total {len(all_comments_elements)} komentar ditemukan untuk diproses setelah scrolling.")
                                 
                                 comment_replied_in_video = False
@@ -360,7 +412,7 @@ def run_tiktok_bot_task(user_id: int, api_client: APIClient):
                                     comment_text = ""
                                     try:
                                         # Selector teks komentar dari bot-sebelum-dipisahkan.py
-                                        comment_text_element = comment_element.find_element(By.CSS_SELECTOR, '[data-e2e^="comment-level-"]')
+                                        comment_text_element = comment_element.find_element(By.XPATH, ".//div[contains(@data-e2e, 'comment-content-') or contains(@class, 'DivCommentContent')]")
                                         comment_text = comment_text_element.text
                                     except NoSuchElementException:
                                         print("Gagal mendapatkan teks komentar. Melewati.")
@@ -452,17 +504,22 @@ def run_tiktok_bot_task(user_id: int, api_client: APIClient):
                                             if ai_generated_reply_cleaned == "[TIDAK_MEMBALAS]":
                                                 print("   -> AI menginstruksikan untuk TIDAK MEMBALAS komentar ini karena tidak relevan/valid.")
                                                 print("   -> Melewati balasan karena instruksi AI.")
-                                                # Tutup modal balasan jika AI menginstruksikan tidak membalas
+                                                # Tutup balasan jika AI menginstruksikan tidak membalas
                                                 try:
-                                                    cancel_button = WebDriverWait(driver, 5).until(
-                                                        EC.element_to_be_clickable((By.XPATH, "//div[@role=\'button\' and @aria-label=\'Cancel\']"))
+                                                    # Menggunakan selector baru berdasarkan inspect element
+                                                    close_button_selector = (By.CSS_SELECTOR, 'div[class*="DivCloseBtn"]')
+                                                    cancel_button = WebDriverWait(driver, 3).until( # Kurangi timeout
+                                                        EC.element_to_be_clickable(close_button_selector) # Gunakan selector baru
                                                     )
                                                     cancel_button.click()
-                                                    print("   -> Tombol \'Cancel\' balasan diklik.")
-                                                    WebDriverWait(driver, 5).until(EC.invisibility_of_element_located(text_box)) # Tunggu textbox hilang
-                                                    print("   -> Modal balasan ditutup.")
+                                                    print("   -> Tombol 'Close' balasan diklik.")
+                                                    WebDriverWait(driver, 5).until(EC.invisibility_of_element_located(text_box)) 
+                                                    print("   -> balasan ditutup setelah klik 'Close'.")
                                                 except TimeoutException:
-                                                    print("   -> Peringatan: Tombol \'Cancel\' atau modal balasan tidak dapat ditutup.")
+                                                    print("   -> Peringatan: Tombol 'Close' tidak ditemukan atau tidak dapat diklik dalam waktu yang ditentukan.")
+                                                except Exception as e_cancel:
+                                                    print(f"   -> Peringatan: Error tak terduga saat mencoba menutup modal balasan: {e_cancel}")
+                                                
                                                 comments_processed_count_in_video += 1
                                                 time.sleep(1)
                                                 continue 
@@ -503,38 +560,49 @@ def run_tiktok_bot_task(user_id: int, api_client: APIClient):
                                         print(f"   -> Gagal berinteraksi dengan elemen balasan (timeout): {e}. Melewati balasan ini.")
                                         # Coba tutup modal jika timeout terjadi di tengah proses balasan
                                         try:
+                                            # Menggunakan selector baru berdasarkan inspect element
+                                            close_button_selector_timeout = (By.CSS_SELECTOR, 'div[class*="DivCloseBtn"]')
                                             cancel_button_in_modal = WebDriverWait(driver, 2).until(
-                                                EC.element_to_be_clickable((By.XPATH, "//div[@role=\'button\' and @aria-label=\'Cancel\']"))
+                                                EC.element_to_be_clickable(close_button_selector_timeout)
                                             )
                                             cancel_button_in_modal.click()
-                                            print("   -> Tombol \'Cancel\' di modal balasan diklik setelah timeout.")
+                                            print("   -> Tombol 'Close' di modal balasan diklik setelah timeout.")
                                             WebDriverWait(driver, 5).until(EC.invisibility_of_element_located(text_box)) 
-                                        except:
-                                            pass 
+                                        except TimeoutException:
+                                            print("   -> Peringatan: Tombol 'Close' atau modal balasan tidak dapat ditutup setelah timeout.")
+                                        except Exception as e_cancel_timeout:
+                                            print(f"   -> Peringatan: Error tak terduga saat mencoba menutup modal balasan setelah timeout: {e_cancel_timeout}")
                                     except ElementClickInterceptedException as e:
                                         print(f"   -> Tombol/text box terhalang: {e}. Melewati balasan ini.")
-                                        # Coba tutup modal jika terhalang
                                         try:
+                                            # Menggunakan selector baru berdasarkan inspect element
+                                            close_button_selector_intercepted = (By.CSS_SELECTOR, 'div[class*="DivCloseBtn"]')
                                             cancel_button_in_modal = WebDriverWait(driver, 2).until(
-                                                EC.element_to_be_clickable((By.XPATH, "//div[@role=\'button\' and @aria-label=\'Cancel\']"))
+                                                EC.element_to_be_clickable(close_button_selector_intercepted)
                                             )
                                             cancel_button_in_modal.click()
-                                            print("   -> Tombol \'Cancel\' di modal balasan diklik setelah terhalang.")
+                                            print("   -> Tombol 'Close' di modal balasan diklik setelah terhalang.")
                                             WebDriverWait(driver, 5).until(EC.invisibility_of_element_located(text_box)) 
-                                        except:
-                                            pass 
+                                        except TimeoutException:
+                                            print("   -> Peringatan: Tombol 'Close' atau modal balasan tidak dapat ditutup setelah terhalang.")
+                                        except Exception as e_cancel_intercepted:
+                                            print(f"   -> Peringatan: Error tak terduga saat mencoba menutup modal balasan setelah terhalang: {e_cancel_intercepted}")
                                     except Exception as e:
                                         print(f"   -> Terjadi error tak terduga saat membalas komentar: {e}. Melewati balasan ini.")
-                                        # Coba tutup modal jika ada error tak terduga
+                                        # PERBAIKAN: Lebih robust dalam menutup modal jika ada error tak terduga
                                         try:
+                                            # Menggunakan selector baru berdasarkan inspect element
+                                            close_button_selector_generic = (By.CSS_SELECTOR, 'div[class*="DivCloseBtn"]')
                                             cancel_button_in_modal = WebDriverWait(driver, 2).until(
-                                                EC.element_to_be_clickable((By.XPATH, "//div[@role=\'button\' and @aria-label=\'Cancel\']"))
+                                                EC.element_to_be_clickable(close_button_selector_generic)
                                             )
                                             cancel_button_in_modal.click()
-                                            print("   -> Tombol \'Cancel\' di modal balasan diklik setelah error tak terduga.")
+                                            print("   -> Tombol 'Close' di modal balasan diklik setelah error tak terduga.")
                                             WebDriverWait(driver, 5).until(EC.invisibility_of_element_located(text_box)) 
-                                        except:
-                                            pass 
+                                        except TimeoutException:
+                                            print("   -> Peringatan: Tombol 'Close' atau modal balasan tidak dapat ditutup setelah error tak terduga.")
+                                        except Exception as e_cancel_generic:
+                                            print(f"   -> Peringatan: Error tak terduga saat mencoba menutup modal balasan setelah error generik: {e_cancel_generic}")
                                     
                                 if not comment_replied_in_video:
                                     print("Tidak ada komentar yang memenuhi kriteria filter untuk dibalas di video ini.")
@@ -620,8 +688,14 @@ def run_tiktok_bot_task(user_id: int, api_client: APIClient):
 
         print(f"Selesai memproses {videos_processed_count} video untuk {tiktok_username}.") 
 
-        api_client.update_user_last_run_api(user_id) 
-        print(f"Waktu terakhir bot dijalankan untuk user ID: {user_id} diperbarui melalui API.") 
+        # PERBAIKAN: Pindahkan pembaruan last_run_at ke sini
+        # Hanya update jika setidaknya 1 video berhasil diproses atau jika proses mencapai titik ini tanpa error fatal.
+        # Ini mencegah update jika gagal mengumpulkan daftar video di awal.
+        if videos_processed_count > 0 or len(videos_to_process_this_run) > 0:
+            api_client.update_user_last_run_api(user_id) 
+            print(f"Waktu terakhir bot dijalankan untuk user ID: {user_id} diperbarui melalui API.") 
+        else:
+            print(f"Tidak ada video yang diproses untuk user ID: {user_id}. last_run_at TIDAK diperbarui.")
 
     except Exception as e: 
         print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] ERROR fatal saat menjalankan bot untuk user ID: {user_id}. Error: {e}") 
@@ -631,4 +705,3 @@ def run_tiktok_bot_task(user_id: int, api_client: APIClient):
             print(f"Operasi selesai untuk user ID: {user_id}. Browser ditutup.") 
         else:
             print(f"Operasi selesai untuk user ID: {user_id}. Driver tidak diinisialisasi atau sudah ditutup.")
-            

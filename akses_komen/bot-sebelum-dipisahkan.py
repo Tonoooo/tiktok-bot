@@ -44,9 +44,7 @@ def run_tiktok_bot_task(user_id: int, app_instance: Flask):
     login_successful = False
     target_akun = "Unknown_User" # Inisialisasi default agar selalu tersedia di 'finally'
 
-    try: # <--- AWALI DENGAN BLOK TRY UTAMA DI SINI
-        # --- SELURUH LOGIKA BOT AKAN DIBUNGKUS DALAM SATU app_context ---
-        # Ini adalah kunci untuk menghindari DetachedInstanceError
+    try:
         with app_instance.app_context():
             # Fetch user data for initial setup (target_akun, description, initial cookies)
             user = User.query.get(user_id)
