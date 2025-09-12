@@ -297,6 +297,68 @@ def payment():
                             is_subscribed=is_subscribed, 
                             subscription_end_date=subscription_end_date,
                             transaction_history=transaction_history)
+    
+# api untuk mengosongkan cookies tiktok
+@app.route('/api/disconnect_tiktok', methods=['POST'])
+@login_required
+def api_disconnect_tiktok():
+    user = User.query.get(current_user.id)
+    if not user:
+        return jsonify({"message": "User tidak ditemukan."}), 404
+    
+    try:
+        user.cookies_json = json.dumps([]) # Set cookies menjadi JSON string kosong
+        db.session.add(user)
+        db.session.commit()
+        return jsonify({"message": "Koneksi TikTok berhasil diputuskan."}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"message": f"Gagal memutuskan koneksi TikTok: {e}"}), 500
+
+# BARU: API Endpoint untuk memicu bot lokal agar memulai proses QR login baru
+@app.route('/api/trigger_qr_login', methods=['POST'])
+@login_required
+def api_trigger_qr_login():
+    user = User.query.get(current_user.id)
+    if not user:
+        return jsonify({"message": "User tidak ditemukan."}), 404
+    
+    try:
+        if user.cookies_json and json.loads(user.cookies_json):
+            user.cookies_json = json.dumps([]) # Paksa user untuk login ulang
+            db.session.add(user)
+            db.session.commit()
+            # Juga hapus QR code image yang ada di VPS agar UI tidak menampilkan yang lama
+            qr_image_path = os.path.join(QR_CODE_TEMP_DIR_SERVER, f'qrcode_{user.id}.png')
+            if os.path.exists(qr_image_path):
+                os.remove(qr_image_path)
+                print(f"QR code lama untuk user {user.id} dihapus dari VPS.")
+        
+        # Kita tidak memanggil bot secara langsung dari sini,
+        # melainkan mengandalkan worker.py untuk mendeteksi user ini perlu login lagi.
+        # Ini akan terjadi di siklus pengecekan tugas worker.py berikutnya.
+
+        return jsonify({"message": "Proses QR login akan dimulai ulang pada siklus bot berikutnya. Mohon tunggu beberapa saat untuk QR code baru muncul."}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"message": f"Gagal memicu proses QR login: {e}"}), 500
+
+# BARU: API Endpoint untuk UI mengambil pengaturan user, termasuk status cookies
+@app.route('/api/user_settings_for_ui', methods=['GET'])
+@login_required
+def api_get_user_settings_for_ui():
+    user = User.query.get(current_user.id)
+    if not user:
+        return jsonify({"message": "User tidak ditemukan."}), 404
+    
+    return jsonify({
+        "user_id": user.id,
+        "username": user.username,
+        "tiktok_username": user.tiktok_username,
+        "cookies_json": user.cookies_json # Kirim cookies_json untuk cek status di frontend
+    }), 200
+    
+
 
 # Endpoint untuk pengaturan creator (melalui UI, otentikasi Flask-Login)
 @app.route('/api/creator_settings/<int:user_id>', methods=['GET', 'POST'])
