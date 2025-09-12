@@ -46,7 +46,7 @@ class ProcessedVideo(db.Model):
     transcript = db.Column(db.Text, nullable=True) # Transkrip video
     processed_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False) # Kapan terakhir diproses
 
-    processed_comments = db.relationship('ProcessedComment', backref=db.backref('video', lazy=True, cascade="all, delete-orphan"))
+    processed_comments = db.relationship('ProcessedComment', backref='video', lazy=True, cascade="all, delete-orphan")
 
     def __repr__(self):
         return f'<ProcessedVideo {self.video_url}>'
