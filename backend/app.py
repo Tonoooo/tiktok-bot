@@ -82,7 +82,7 @@ def api_key_auth():
 # ===============================================
 
 @app.route('/')
-def index():
+def welcome():
     return render_template('welcome.html')
 
 @app.route('/register', methods=['GET', 'POST'])
