@@ -13,6 +13,8 @@ class User(db.Model, UserMixin): # Tambahkan UserMixin di sini
     password_hash = db.Column(db.String(255), nullable=False) 
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False) # BARU: Kolom created_at
 
+    is_admin = db.Column(db.Boolean, default=False, nullable=False)
+
     # Kolom yang digabungkan dari CreatorSettings
     tiktok_username = db.Column(db.String(120), unique=True, nullable=True) # Unique, tapi bisa Nullable untuk registrasi awal
     creator_character_description = db.Column(db.Text, nullable=True)
@@ -44,5 +46,29 @@ class ProcessedVideo(db.Model):
     transcript = db.Column(db.Text, nullable=True) # Transkrip video
     processed_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False) # Kapan terakhir diproses
 
+    processed_comments = db.relationship('ProcessedComment', backref=db.backref('video', lazy=True, cascade="all, delete-orphan"))
+
     def __repr__(self):
         return f'<ProcessedVideo {self.video_url}>'
+    
+class ProcessedComment(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    processed_video_id = db.Column(db.Integer, db.ForeignKey('processed_video.id'), nullable=False)
+    
+    # ID komentar asli dari TikTok (jika tersedia dan dapat diidentifikasi)
+    tiktok_comment_id = db.Column(db.String(255), nullable=True) 
+    
+    comment_text = db.Column(db.Text, nullable=False)
+    reply_text = db.Column(db.Text, nullable=True) # Balasan dari AI, atau [TIDAK_MEMBALAS]
+    
+    # Kapan komentar ini diproses dan dibalas
+    processed_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    
+    # Flag untuk menunjukkan apakah balasan benar-benar diposting
+    is_replied = db.Column(db.Boolean, default=False, nullable=False) 
+    
+    # Opsional: Untuk menyimpan keputusan mentah LLM jika diperlukan untuk debugging
+    llm_raw_decision = db.Column(db.Text, nullable=True)
+
+    def __repr__(self):
+        return f'<ProcessedComment {self.id} for Video {self.processed_video_id}>'

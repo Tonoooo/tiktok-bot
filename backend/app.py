@@ -1,9 +1,11 @@
-from flask import Flask, request, jsonify, send_from_directory
-from flask_cors import CORS
+import os
+import json
+import base64
 from datetime import datetime, timedelta
-import threading 
-import os 
-import json 
+
+from flask import Flask, request, jsonify, render_template, redirect, url_for, flash
+from flask_login import LoginManager, login_user, logout_user, current_user, login_required
+from werkzeug.security import generate_password_hash, check_password_hash
 
 import sys
 # Secara eksplisit tambahkan direktori proyek ke sys.path
@@ -12,7 +14,8 @@ project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir
 if project_root not in sys.path:
     sys.path.append(project_root)
     
-from backend.models import db, User, ProcessedVideo
+from backend.models import db, User, ProcessedVideo, ProcessedComment
+from backend.forms import RegistrationForm, LoginForm
 
 # HAPUS: run_tiktok_bot_task dan generate_qr_and_wait_for_login tidak lagi dipanggil di Flask app
 # from akses_komen.bot import run_tiktok_bot_task 
@@ -22,22 +25,23 @@ from flask_login import LoginManager, login_user, logout_user, login_required, c
 from werkzeug.security import generate_password_hash, check_password_hash 
 
 app = Flask(__name__)
+app.config['SECRET_KEY'] = 'kunci_rahasia_anda_yang_sangat_aman_dan_sulit_ditebak' 
 
-# Konfigurasi Flask app untuk database
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
 db_path = os.path.join(project_root, 'site.db')
-
 app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['SECRET_KEY'] = 'your_secret_key' 
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-CORS(app) 
+# CORS(app) 
 
 db.init_app(app)
 
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login' 
+login_manager.login_message = "Harap masuk untuk mengakses halaman ini."
+login_manager.login_message_category = "warning"
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -50,17 +54,22 @@ def load_user(user_id):
 # Dalam produksi, gunakan metode yang lebih aman (mis. token JWT, manajemen API key yang lebih baik)
 API_BOT_KEY = "super_secret_bot_key_123" # GANTI DENGAN KUNCI YANG LEBIH AMAN!
 
+# Direktori untuk menyimpan QR code sementara di VPS
+QR_CODE_TEMP_DIR_SERVER = os.path.join(project_root, 'qr_codes_temp_server')
+if not os.path.exists(QR_CODE_TEMP_DIR_SERVER):
+    os.makedirs(QR_CODE_TEMP_DIR_SERVER)
+
 @app.before_request
 def api_key_auth():
-    # List endpoint yang membutuhkan API Key
-    # NOTE: user_id di endpoint ini adalah user_id dari User tabel, bukan creator_id.
     api_key_endpoints = [
         'get_user_settings_api', 
         'update_user_cookies_api',
         'update_user_last_run_api',
         'get_processed_video_by_url_api',
         'save_processed_video_api',
-        # Tambahkan endpoint bot lainnya di sini
+        'upload_qr_image_api', 
+        'get_active_users_for_bot',
+        'save_processed_comment_api', 
     ]
 
     if request.endpoint in api_key_endpoints:
@@ -69,82 +78,58 @@ def api_key_auth():
             return jsonify({"message": "Unauthorized: Invalid API Key."}), 401
 
 # ===============================================
-# WEB UI Endpoints (Membutuhkan Flask-Login)
+# ROUTE WEBSITE (UI)
 # ===============================================
 
 @app.route('/')
 def index():
-    return jsonify({"message": "TikTok Auto-Responder Backend API is running!"})
+    return render_template('welcome.html')
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
-    if request.method == 'POST':
-        data = request.get_json()
-        username = data.get('username')
-        email = data.get('email')
-        password = data.get('password')
-        
-        if not username or not email or not password:
-            return jsonify({"message": "Username, email, and password are required."}), 400
+    if current_user.is_authenticated:
+        return redirect(url_for('dashboard')) # Jika sudah login, redirect ke dashboard
 
-        hashed_password = generate_password_hash(password)
-
-        with app.app_context():
-            existing_user = User.query.filter((User.username == username) | (User.email == email)).first()
-            if existing_user:
-                return jsonify({"message": "Username or email already exists."}), 409
-
-            new_user = User(
-                username=username, 
-                email=email, 
-                password_hash=hashed_password,
-                tiktok_username=None, 
-                creator_character_description=None,
-                is_active=True,
-                daily_run_count=0,
-                last_run_at=None,
-                cookies_json=json.dumps([])
-            )
-            db.session.add(new_user)
-            db.session.commit()
-            print(f"User baru terdaftar: {username}")
-            return jsonify({"message": "User registered successfully!", "user_id": new_user.id}), 201
-    
-    return jsonify({"message": "Send POST request to register."}), 405
+    form = RegistrationForm()
+    if form.validate_on_submit():
+        hashed_password = generate_password_hash(form.password.data)
+        new_user = User(username=form.username.data, email=form.email.data, password_hash=hashed_password, is_admin=False) # Klien default bukan admin
+        db.session.add(new_user)
+        db.session.commit()
+        flash('Akun Anda berhasil didaftarkan! Silakan masuk.', 'success')
+        return redirect(url_for('login'))
+    return render_template('register.html', form=form)
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    if request.method == 'POST':
-        data = request.get_json()
-        username = data.get('username')
-        password = data.get('password')
+    if current_user.is_authenticated:
+        return redirect(url_for('dashboard'))
 
-        if not username or not password:
-            return jsonify({"message": "Username and password are required."}), 400
-        
-        with app.app_context():
-            user = User.query.filter_by(username=username).first()
-            
-            if user and check_password_hash(user.password_hash, password):
-                login_user(user) 
-                print(f"User {username} berhasil login.")
-                return jsonify({"message": "Login successful!", "user_id": user.id, "username": user.username}), 200
-            else:
-                return jsonify({"message": "Invalid username or password."}), 401
-    
-    return jsonify({"message": "Send POST request to login."}), 405
+    form = LoginForm()
+    if form.validate_on_submit():
+        user = User.query.filter_by(email=form.email.data).first()
+        if user and check_password_hash(user.password_hash, form.password.data):
+            login_user(user, remember=form.remember_me.data)
+            flash('Berhasil masuk!', 'success')
+            next_page = request.args.get('next')
+            return redirect(next_page or url_for('dashboard'))
+        else:
+            flash('Login gagal. Periksa email dan kata sandi Anda.', 'danger')
+    return render_template('login.html', form=form)
 
 @app.route('/logout')
 @login_required 
 def logout():
     logout_user()
-    print(f"User {current_user.username if current_user.is_authenticated else 'unknown'} telah logout.")
-    return jsonify({"message": "Logged out successfully."}), 200
+    flash('Anda telah keluar.', 'info')
+    return redirect(url_for('welcome'))
 
 @app.route('/dashboard')
 @login_required
 def dashboard():
-    return jsonify({"message": f"Welcome to the dashboard, {current_user.username}!", "user_id": current_user.id}), 200
+    total_videos = ProcessedVideo.query.filter_by(user_id=current_user.id).count()
+    total_comments = ProcessedComment.query.filter(ProcessedComment.video.has(user_id=current_user.id)).count()
+    return render_template('dashboard.html', total_videos=total_videos, total_comments=total_comments)
 
 # Endpoint untuk pengaturan creator (melalui UI, otentikasi Flask-Login)
 @app.route('/api/creator_settings/<int:user_id>', methods=['GET', 'POST'])
@@ -446,8 +431,59 @@ def save_processed_video_api():
         db.session.rollback()
         return jsonify({"message": f"Error saving/updating video transcript: {e}"}), 500
 
-# Endpoint untuk bot lokal mengupload gambar QR ke VPS
-# ... existing code ...
+
+@app.route('/api/processed_videos/<int:video_id>/comments', methods=['POST']) # BARU: Endpoint untuk menyimpan komentar
+def save_processed_comment_api(video_id):
+    """
+    Menerima data komentar yang sudah diproses dari bot lokal dan menyimpannya ke database.
+    Membutuhkan API Key.
+    """
+    data = request.get_json()
+    if not data:
+        return jsonify({"message": "Data komentar tidak ditemukan."}), 400
+
+    # Pastikan video ada dan dimiliki oleh user yang terkait (ini mungkin perlu cek user_id juga dari bot)
+    processed_video = ProcessedVideo.query.get(video_id)
+    if not processed_video:
+        return jsonify({"message": "Video yang diproses tidak ditemukan."}), 404
+
+    # Ambil data komentar dari payload
+    tiktok_comment_id = data.get('tiktok_comment_id')
+    comment_text = data.get('comment_text')
+    reply_text = data.get('reply_text')
+    is_replied = data.get('is_replied', False)
+    llm_raw_decision = data.get('llm_raw_decision')
+
+    # Buat atau update ProcessedComment
+    # Jika ada tiktok_comment_id, kita bisa mencoba mencari apakah komentar ini sudah ada untuk video ini
+    existing_comment = None
+    if tiktok_comment_id:
+        existing_comment = ProcessedComment.query.filter_by(
+            processed_video_id=video_id, 
+            tiktok_comment_id=tiktok_comment_id
+        ).first()
+
+    if existing_comment:
+        existing_comment.comment_text = comment_text
+        existing_comment.reply_text = reply_text
+        existing_comment.is_replied = is_replied
+        existing_comment.llm_raw_decision = llm_raw_decision
+        existing_comment.processed_at = datetime.utcnow() # Update timestamp
+        db.session.commit()
+        return jsonify({"message": "Komentar yang diproses berhasil diperbarui.", "comment_id": existing_comment.id}), 200
+    else:
+        new_comment = ProcessedComment(
+            processed_video_id=video_id,
+            tiktok_comment_id=tiktok_comment_id,
+            comment_text=comment_text,
+            reply_text=reply_text,
+            is_replied=is_replied,
+            llm_raw_decision=llm_raw_decision,
+            processed_at=datetime.utcnow()
+        )
+        db.session.add(new_comment)
+        db.session.commit()
+        return jsonify({"message": "Komentar yang diproses berhasil disimpan.", "comment_id": new_comment.id}), 201
 
 @app.route('/api/upload_qr_image/<int:user_id>', methods=['POST'])
 def upload_qr_image_api(user_id):

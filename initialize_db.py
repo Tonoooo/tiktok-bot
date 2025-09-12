@@ -27,6 +27,9 @@ db.init_app(app)
 with app.app_context():
     print(f"Menginisialisasi database di: {db_path}") 
     
+    db.drop_all() # Hapus semua tabel lama
+    db.create_all() # Buat semua tabel baru
+    
     # Hapus file database yang sudah ada untuk memastikan tabel dibuat ulang (PENTING!)
     if os.path.exists(db_path):
         print(f"Menghapus database yang sudah ada: {db_path}")

@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block title %}Selamat Datang!{% endblock %}
+
+{% block content %}
+<div class="text-center py-16 px-4 sm:px-6 lg:px-8">
+    <h1 class="text-4xl font-extrabold text-gray-900 sm:text-5xl md:text-6xl">
+        <span class="block text-blue-600">Sitono AI</span>
+        <span class="block text-gray-800 mt-2">Balas Komentar Otomatis, Tanpa Batas</span>
+    </h1>
+    <p class="mt-6 max-w-2xl mx-auto text-xl text-gray-500">
+        Maksimalkan interaksi di TikTok Shop Anda dengan AI yang membalas komentar pelanggan 24/7. Hemat waktu, tingkatkan penjualan!
+    </p>
+    <div class="mt-10 flex flex-col sm:flex-row justify-center gap-4">
+        <a href="{{ url_for('register') }}" class="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-8 rounded-lg text-lg transition duration-300 ease-in-out transform hover:-translate-y-1">
+            Daftar Sekarang
+        </a>
+        <a href="{{ url_for('login') }}" class="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-lg text-lg transition duration-300 ease-in-out transform hover:-translate-y-1">
+            Sudah Punya Akun? Masuk
+        </a>
+    </div>
+    
+    <!-- Bagian Copywriting Lanjutan (Opsional) -->
+    <div class="mt-20 grid grid-cols-1 md:grid-cols-3 gap-8 text-left max-w-4xl mx-auto">
+        <div class="p-6 bg-white rounded-lg shadow-md">
+            <h3 class="text-xl font-semibold text-gray-900 mb-3">Interaksi Otomatis</h3>
+            <p class="text-gray-600">AI kami membalas setiap komentar di video TikTok Shop Anda secara otomatis, 24 jam sehari, 7 hari seminggu.</p>
+        </div>
+        <div class="p-6 bg-white rounded-lg shadow-md">
+            <h3 class="text-xl font-semibold text-gray-900 mb-3">Persona Kreator</h3>
+            <p class="text-gray-600">Balasan disesuaikan dengan persona kreator Anda (gender, usia, karakter) untuk pengalaman yang natural dan autentik.</p>
+        </div>
+        <div class="p-6 bg-white rounded-lg shadow-md">
+            <h3 class="text-xl font-semibold text-gray-900 mb-3">Fokus pada Penjualan</h3>
+            <p class="text-gray-600">AI mampu membedakan komentar dan memprioritaskan ajakan bertindak untuk "keranjang kuning" atau "link di bio".</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
