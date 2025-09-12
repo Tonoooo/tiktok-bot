@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+
+{% block title %}Detail Komentar: Video AI{% endblock %}
+
+{% block content %}
+<div class="container mx-auto p-4">
+    <h1 class="text-3xl font-bold text-gray-900 mb-4">Detail Komentar Video</h1>
+    <p class="mb-6 text-gray-700">Video: <a href="{{ video.url_for_display() }}" target="_blank" rel="noopener noreferrer" class="text-blue-600 hover:underline">{{ video.video_url }}</a></p>
+
+    <div class="bg-white p-6 rounded-lg shadow-md">
+        <h2 class="text-xl font-semibold text-gray-800 mb-4">Daftar Komentar</h2>
+        
+        {% if comments %}
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Tanggal
+                        </th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Komentar Asli
+                        </th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Balasan AI
+                        </th>
+                        <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Status
+                        </th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    {% for comment in comments %}
+                    <tr>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {{ comment.processed_at }}
+                        </td>
+                        <td class="px-6 py-4 text-sm text-gray-900">
+                            {{ comment.comment_text }}
+                        </td>
+                        <td class="px-6 py-4 text-sm {% if '[TIDAK_MEMBALAS]' in comment.reply_text %}text-red-600 italic{% else %}text-gray-900{% endif %}">
+                            {% if '[TIDAK_MEMBALAS]' in comment.reply_text %}
+                                AI tidak membalas
+                            {% else %}
+                                {{ comment.reply_text }}
+                            {% endif %}
+                        </td>
+                        <td class="px-6 py-4 whitespace-nowrap text-sm {% if comment.is_replied %}text-green-600{% else %}text-red-600{% endif %}">
+                            {{ 'Dibalas' if comment.is_replied else 'Dilewati' }}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-gray-600">Belum ada komentar yang diproses untuk video ini.</p>
+        {% endif %}
+        
+        <div class="mt-6">
+            <a href="{{ url_for('ai_activity') }}" class="text-blue-600 hover:underline">&larr; Kembali ke Daftar Video</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -15,7 +15,7 @@ if project_root not in sys.path:
     sys.path.append(project_root)
     
 from backend.models import db, User, ProcessedVideo, ProcessedComment
-from backend.forms import RegistrationForm, LoginForm
+from backend.forms import RegistrationForm, LoginForm, AiSettingsForm
 
 # HAPUS: run_tiktok_bot_task dan generate_qr_and_wait_for_login tidak lagi dipanggil di Flask app
 # from akses_komen.bot import run_tiktok_bot_task 
@@ -132,6 +132,171 @@ def dashboard():
     total_videos = ProcessedVideo.query.filter_by(user_id=current_user.id).count()
     total_comments = ProcessedComment.query.filter(ProcessedComment.video.has(user_id=current_user.id)).count()
     return render_template('dashboard.html', total_videos=total_videos, total_comments=total_comments)
+
+
+@app.route('/tiktok_connect')
+@login_required
+def tiktok_connect():
+    user = User.query.get(current_user.id)
+    if not user:
+        flash("User tidak ditemukan.", "danger")
+        return redirect(url_for('dashboard'))
+    
+    cookies_present = bool(user.cookies_json and json.loads(user.cookies_json))
+    
+    # URL untuk gambar QR code (akan dilayani oleh serve_qr_code)
+    qr_image_url = url_for('serve_qr_code', filename=f'qrcode_{user.id}.png')
+    
+    return render_template('tiktok_connect.html', 
+                            cookies_present=cookies_present, 
+                            tiktok_username=user.tiktok_username,
+                            qr_image_url=qr_image_url)
+
+
+@app.route('/ai_settings', methods=['GET', 'POST'])
+@login_required
+def ai_settings():
+    form = AiSettingsForm()
+    user = User.query.get(current_user.id)
+
+    if not user:
+        flash("User tidak ditemukan.", "danger")
+        return redirect(url_for('dashboard'))
+
+    if form.validate_on_submit():
+        # Proses form submission
+        user.tiktok_username = form.tiktok_username.data
+        user.creator_character_description = form.creator_character_description.data
+        user.is_active = form.is_active.data
+        
+        try:
+            # Validasi daily_run_count
+            daily_run_count_int = int(form.daily_run_count.data)
+            if daily_run_count_int < 0:
+                flash('Jumlah Jalan Per Hari tidak boleh negatif.', 'danger')
+                return render_template('ai_settings.html', form=form, user_settings=user)
+            user.daily_run_count = daily_run_count_int
+        except ValueError:
+            flash('Jumlah Jalan Per Hari harus berupa angka.', 'danger')
+            return render_template('ai_settings.html', form=form, user_settings=user)
+        
+        try:
+            db.session.add(user)
+            db.session.commit()
+            flash('Pengaturan AI berhasil diperbarui!', 'success')
+            return redirect(url_for('ai_settings'))
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Gagal memperbarui pengaturan AI: {e}', 'danger')
+
+    elif request.method == 'GET':
+        # Isi form dengan data user yang sudah ada
+        form.tiktok_username.data = user.tiktok_username
+        form.creator_character_description.data = user.creator_character_description
+        form.is_active.data = user.is_active
+        form.daily_run_count.data = str(user.daily_run_count) # Konversi ke string untuk form
+
+    return render_template('ai_settings.html', form=form, user_settings=user)
+
+@app.route('/ai_activity')
+@login_required
+def ai_activity():
+    user_videos = ProcessedVideo.query.filter_by(user_id=current_user.id).order_by(ProcessedVideo.processed_at.desc()).all()
+    
+    videos_data = []
+    for video in user_videos:
+        # Hitung jumlah komentar yang dibalas untuk setiap video
+        replied_comments_count = ProcessedComment.query.filter_by(processed_video_id=video.id, is_replied=True).count()
+        total_comments_count = ProcessedComment.query.filter_by(processed_video_id=video.id).count()
+
+        videos_data.append({
+            "id": video.id,
+            "video_url": video.url_for_display(), # Akan dibuat fungsi helper url_for_display() di models.py
+            "transcript_snippet": (video.transcript[:100] + '...') if video.transcript and len(video.transcript) > 100 else video.transcript,
+            "processed_at": video.processed_at.strftime('%Y-%m-%d %H:%M:%S'),
+            "replied_comments_count": replied_comments_count,
+            "total_comments_count": total_comments_count
+        })
+    
+    return render_template('ai_activity.html', videos=videos_data)
+
+# BARU: Rute untuk halaman "Detail Balasan Komentar" per Video
+@app.route('/ai_activity/<int:video_id>/comments')
+@login_required
+def comment_details(video_id):
+    video = ProcessedVideo.query.get_or_404(video_id)
+    
+    # Pastikan video ini milik user yang sedang login
+    if video.user_id != current_user.id:
+        flash("Anda tidak memiliki akses ke video ini.", "danger")
+        return redirect(url_for('ai_activity'))
+    
+    comments = ProcessedComment.query.filter_by(processed_video_id=video.id).order_by(ProcessedComment.processed_at.asc()).all()
+    
+    comments_data = []
+    for comment in comments:
+        comments_data.append({
+            "id": comment.id,
+            "comment_text": comment.comment_text,
+            "reply_text": comment.reply_text,
+            "is_replied": comment.is_replied,
+            "processed_at": comment.processed_at.strftime('%Y-%m-%d %H:%M:%S')
+        })
+
+    return render_template('comment_details.html', video=video, comments=comments_data)
+
+# --- API ENDPOINT BARU UNTUK KLIEN (FLASK-LOGIN AUTHENTICATION) ---
+# Ini berbeda dengan API Bot Worker yang menggunakan API Key
+
+# Endpoint untuk mengambil daftar video yang diproses untuk user (melalui UI, otentikasi Flask-Login)
+# Ini sudah ada di bawah, tapi kita bisa pakai rute /ai_activity
+# @app.route('/api/processed_videos/<int:user_id>', methods=['GET'])
+# @login_required
+# def get_processed_videos_for_ui(user_id):
+#     if current_user.id != user_id:
+#         return jsonify({"message": "Unauthorized access."}), 403
+#     # ... (logic sama seperti di bawah, tapi bisa diganti dengan rute ai_activity)
+
+# Endpoint untuk mendapatkan detail komentar untuk video tertentu (melalui UI, otentikasi Flask-Login)
+# Ini juga bisa diganti dengan rute comment_details
+# @app.route('/api/processed_videos/<int:video_id>/comments_for_ui', methods=['GET'])
+# @login_required
+# def get_comments_for_video_ui(video_id):
+#     video = ProcessedVideo.query.get_or_404(video_id)
+#     if video.user_id != current_user.id:
+#         return jsonify({"message": "Unauthorized access."}), 403
+    
+#     comments = ProcessedComment.query.filter_by(processed_video_id=video_id).order_by(ProcessedComment.processed_at.asc()).all()
+    
+#     comments_data = []
+#     for comment in comments:
+#         comments_data.append({
+#             "id": comment.id,
+#             "comment_text": comment.comment_text,
+#             "reply_text": comment.reply_text,
+#             "is_replied": comment.is_replied,
+#             "processed_at": comment.processed_at.isoformat()
+#         })
+#     return jsonify({"comments": comments_data, "video_url": video.video_url}), 200
+
+@app.route('/payment')
+@login_required
+def payment():
+    # Di masa depan, logika ini akan memeriksa status langganan user
+    # Untuk sekarang, ini adalah placeholder sederhana
+    is_subscribed = False # Contoh: diasumsikan belum berlangganan
+    subscription_end_date = None # Contoh: tanggal berakhir langganan
+    
+    # Contoh riwayat transaksi (dummy data)
+    transaction_history = [
+        {"id": 1, "date": "2025-08-01", "amount": "Rp 50.000", "status": "Sukses"},
+        {"id": 2, "date": "2025-07-01", "amount": "Rp 50.000", "status": "Sukses"}
+    ]
+
+    return render_template('payment.html', 
+                            is_subscribed=is_subscribed, 
+                            subscription_end_date=subscription_end_date,
+                            transaction_history=transaction_history)
 
 # Endpoint untuk pengaturan creator (melalui UI, otentikasi Flask-Login)
 @app.route('/api/creator_settings/<int:user_id>', methods=['GET', 'POST'])

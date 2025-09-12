@@ -51,6 +51,11 @@ class ProcessedVideo(db.Model):
     def __repr__(self):
         return f'<ProcessedVideo {self.video_url}>'
     
+    def url_for_display(self):
+        # Ini bisa disesuaikan jika Anda ingin URL yang lebih "bersih" atau dengan domain tertentu
+        return self.video_url
+    
+    
 class ProcessedComment(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     processed_video_id = db.Column(db.Integer, db.ForeignKey('processed_video.id'), nullable=False)
