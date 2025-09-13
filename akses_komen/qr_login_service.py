@@ -10,6 +10,8 @@ from selenium.common.exceptions import TimeoutException, WebDriverException, NoS
 
 # PERUBAHAN: Ganti import Flask, db, User dengan APIClient
 from akses_komen.api_client import APIClient 
+from datetime import datetime
+
 
 QR_CODE_TEMP_DIR = 'qr_codes_temp'
 os.makedirs(QR_CODE_TEMP_DIR, exist_ok=True)
@@ -110,6 +112,7 @@ def _capture_save_and_upload_qr_code(driver, user_id, api_client, qr_canvas_elem
         return False
 
 def generate_qr_and_wait_for_login(user_id: int, api_client: APIClient):
+    print(f"[{datetime.now()}] Memulai tugas generate_qr_and_wait_for_login untuk user_id: {user_id}")
     driver = None
     qr_image_path = os.path.join(QR_CODE_TEMP_DIR, f'qrcode_{user_id}.png')
     
@@ -117,6 +120,14 @@ def generate_qr_and_wait_for_login(user_id: int, api_client: APIClient):
     if os.path.exists(qr_image_path):
         os.remove(qr_image_path)
         print(f"QR code lama untuk user {user_id} dihapus.")
+            
+    try:
+        api_client.update_user_qr_status(user_id, qr_process_active=True, qr_generated_at=datetime.utcnow().isoformat())
+        print(f"[{datetime.now()}] Berhasil memberi tahu VPS: proses QR login dimulai.")
+    except Exception as e:
+        print(f"[{datetime.now()}] ERROR: Gagal memberi tahu VPS bahwa proses QR login dimulai: {e}")
+        # Lanjutkan saja, karena bot harus tetap mencoba meskipun gagal update status awal
+    
 
     try:
         # =========================
@@ -174,6 +185,10 @@ def generate_qr_and_wait_for_login(user_id: int, api_client: APIClient):
         
         if not modal_qr_triggered:
             print("Gagal membuka modal QR code saat inisialisasi awal setelah beberapa percobaan. Mengakhiri proses login QR.")
+            try:
+                api_client.update_user_qr_status(user_id, qr_process_active=False, qr_generated_at=None)
+            except Exception as update_e:
+                print(f"[{datetime.now()}] ERROR: Gagal memperbarui status QR di VPS setelah gagal trigger modal: {update_e}")
             return False
 
         print(f"Menunggu elemen QR code (canvas) muncul untuk user {user_id}...")
@@ -189,6 +204,10 @@ def generate_qr_and_wait_for_login(user_id: int, api_client: APIClient):
         # ----- Ambil screenshot QR code awal (yang pertama kali muncul) -----
         if not _capture_save_and_upload_qr_code(driver, user_id, api_client, qr_canvas_element, qr_image_path):
             print("Gagal menangkap atau mengunggah QR code awal. Mengakhiri proses login QR.")
+            try:
+                api_client.update_user_qr_status(user_id, qr_process_active=False, qr_generated_at=None)
+            except Exception as update_e:
+                print(f"[{datetime.now()}] ERROR: Gagal memperbarui status QR di VPS setelah gagal unggah awal: {update_e}")
             return False
 
         login_successful = False
@@ -289,41 +308,53 @@ def generate_qr_and_wait_for_login(user_id: int, api_client: APIClient):
                     raise nav_e
 
         if login_successful:
-            # PERUBAHAN: Simpan cookies melalui APIClient
+            # PERUBAHAN: Simpan cookies dan perbarui status QR melalui APIClient
             cookies_json = json.dumps(driver.get_cookies())
-            api_client.update_user_cookies(user_id, cookies_json)
-            print(f"Cookies berhasil disimpan ke database untuk user {user_id} melalui API.")
-            # Hapus QR code lokal setelah login berhasil dan cookies disimpan
-            if os.path.exists(qr_image_path):
-                os.remove(qr_image_path)
-                print(f"QR code lokal untuk user {user_id} dihapus setelah login berhasil.")
+            try:
+                api_client.update_user_cookies_and_qr_status(user_id, cookies_json)
+                print(f"[{datetime.now()}] Cookies berhasil disimpan dan status QR diperbarui ke VPS untuk user {user_id}.")
+            except Exception as e:
+                print(f"[{datetime.now()}] ERROR: Gagal mengirim cookies atau memperbarui status QR ke VPS: {e}")
             return True
         else:
             print(f"Login gagal setelah {MAX_LOGIN_WAIT_TIME/60} menit menunggu untuk user {user_id}.")
-            if os.path.exists(qr_image_path):
-                os.remove(qr_image_path)
-                print(f"QR code lokal untuk user {user_id} dihapus karena login gagal.")
+            # BARU: Perbarui status di VPS bahwa proses gagal
+            try:
+                api_client.update_user_qr_status(user_id, qr_process_active=False, qr_generated_at=None)
+                print(f"[{datetime.now()}] Berhasil memberi tahu VPS: proses QR login GAGAL/timeout.")
+            except Exception as update_e:
+                print(f"[{datetime.now()}] ERROR: Gagal memperbarui status QR di VPS setelah login gagal: {update_e}")
             return False
 
     except TimeoutException:
         print(f"Timeout: QR code tidak discan atau login gagal dalam waktu yang ditentukan untuk user {user_id} (main try-catch).")
-        if os.path.exists(qr_image_path):
-            os.remove(qr_image_path)
-            print(f"QR code lokal untuk user {user_id} dihapus karena timeout.")
+        try:
+            api_client.update_user_qr_status(user_id, qr_process_active=False, qr_generated_at=None)
+            print(f"[{datetime.now()}] Berhasil memberi tahu VPS: proses QR login dibatalkan karena TimeoutException.")
+        except Exception as update_e:
+            print(f"[{datetime.now()}] ERROR: Gagal memperbarui status QR di VPS setelah TimeoutException: {update_e}")
         return False
     except WebDriverException as we:
         print(f"WebDriver ERROR untuk user {user_id} (main try-catch): {we}")
-        if os.path.exists(qr_image_path):
-            os.remove(qr_image_path)
-            print(f"QR code lokal untuk user {user_id} dihapus karena WebDriver error.")
+        try:
+            api_client.update_user_qr_status(user_id, qr_process_active=False, qr_generated_at=None)
+            print(f"[{datetime.now()}] Berhasil memberi tahu VPS: proses QR login dibatalkan karena WebDriverException.")
+        except Exception as update_e:
+            print(f"[{datetime.now()}] ERROR: Gagal memperbarui status QR di VPS setelah WebDriverException: {update_e}")
         return False
     except Exception as e:
         print(f"ERROR tak terduga dalam alur QR login untuk user {user_id} (main try-catch): {e}")
-        if os.path.exists(qr_image_path):
-            os.remove(qr_image_path)
-            print(f"QR code lokal untuk user {user_id} dihapus karena error tak terduga.")
+        try:
+            api_client.update_user_qr_status(user_id, qr_process_active=False, qr_generated_at=None)
+            print(f"[{datetime.now()}] Berhasil memberi tahu VPS: proses QR login dibatalkan karena error tak terduga.")
+        except Exception as update_e:
+            print(f"[{datetime.now()}] ERROR: Gagal memperbarui status QR di VPS setelah error tak terduga: {update_e}")
         return False
     finally:
         if driver:
             driver.quit()
-            print(f"WebDriver ditutup untuk user {user_id}.")
+            print(f"[{datetime.now()}] WebDriver ditutup untuk user {user_id}.")
+        if os.path.exists(qr_image_path):
+            os.remove(qr_image_path)
+            print(f"[{datetime.now()}] QR code lokal untuk user {user_id} dihapus.")
+        print(f"[{datetime.now()}] Tugas generate_qr_and_wait_for_login untuk user_id: {user_id} selesai.")

@@ -573,6 +573,7 @@ def run_tiktok_bot_task(user_id: int, api_client: APIClient):
                                             print("   -> Peringatan: Tombol 'Close' atau modal balasan tidak dapat ditutup setelah terhalang.")
                                         except Exception as e_cancel_intercepted:
                                             print(f"   -> Peringatan: Error tak terduga saat mencoba menutup modal balasan setelah terhalang: {e_cancel_intercepted}")
+                                    
                                     except Exception as e:
                                         print(f"   -> Terjadi error tak terduga saat membalas komentar: {e}. Melewati balasan ini.")
                                         # PERBAIKAN: Lebih robust dalam menutup modal jika ada error tak terduga
@@ -589,6 +590,53 @@ def run_tiktok_bot_task(user_id: int, api_client: APIClient):
                                             print("   -> Peringatan: Tombol 'Close' atau modal balasan tidak dapat ditutup setelah error tak terduga.")
                                         except Exception as e_cancel_generic:
                                             print(f"   -> Peringatan: Error tak terduga saat mencoba menutup modal balasan setelah error generik: {e_cancel_generic}")
+                                
+                                reply_decision = generate_ai_reply(comment_text, creator_character_description)
+                                final_reply = reply_decision.get('reply')
+                                llm_raw_decision = reply_decision.get('raw_decision') # Simpan keputusan mentah LLM
+
+                                if final_reply and final_reply != "[TIDAK_MEMBALAS]":
+                                    try:
+                                        # ... (kode yang sudah ada untuk mengetik dan memposting komentar) ...
+                                        print(f"    -> AI membalas komentar '{comment_text[:50]}...' dengan: '{final_reply[:50]}...'")
+                                        comment_replied_count += 1
+                                        is_replied_status = True
+                                        flash_message_category = 'success'
+                                        flash_message_text = 'Komentar berhasil dibalas.'
+                                    except Exception as e:
+                                        print(f"    -> ERROR saat membalas komentar: {e}")
+                                        is_replied_status = False
+                                        flash_message_category = 'danger'
+                                        flash_message_text = f'Gagal membalas komentar: {e}'
+                                else:
+                                    print(f"    -> AI memutuskan TIDAK MEMBALAS komentar: '{comment_text[:50]}...'")
+                                    is_replied_status = False
+                                    flash_message_category = 'info'
+                                    flash_message_text = 'AI memutuskan untuk tidak membalas komentar.'
+                                    try:
+                                        # Coba menutup modal jika AI memutuskan tidak membalas
+                                        close_button_selector = (By.CSS_SELECTOR, '.css-1k30cuv-5e6d46e3--DivCloseBtn') 
+                                        close_button = WebDriverWait(driver, 3).until(EC.element_to_be_clickable(close_button_selector))
+                                        driver.execute_script("arguments[0].click();", close_button)
+                                        print("Modal balasan komentar ditutup setelah AI tidak membalas.")
+                                    except TimeoutException:
+                                        print("Peringatan: Tombol 'Cancel' atau modal balasan tidak dapat ditutup.")
+                                    except Exception as close_ex:
+                                        print(f"Peringatan: Error saat mencoba menutup modal balasan: {close_ex}")
+   
+                                try:
+                                    api_client.save_processed_comment(
+                                        processed_video_id=video_id,
+                                        tiktok_comment_id=None, # Tidak menggunakan ID komentar dari TikTok
+                                        comment_text=comment_text,
+                                        reply_text=final_reply,
+                                        is_replied=is_replied_status,
+                                        llm_raw_decision=llm_raw_decision
+                                    )
+                                    print(f"    -> Detail komentar disimpan ke database.")
+                                except Exception as e:
+                                    print(f"    -> ERROR: Gagal menyimpan detail komentar ke database: {e}")
+
                                     
                                 if not comment_replied_in_video:
                                     print("Tidak ada komentar yang memenuhi kriteria filter untuk dibalas di video ini.")

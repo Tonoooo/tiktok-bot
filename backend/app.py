@@ -8,6 +8,14 @@ from flask_login import LoginManager, login_user, logout_user, current_user, log
 from werkzeug.security import generate_password_hash, check_password_hash
 
 import sys
+from rq import Queue
+import redis
+
+from backend.tasks import enqueue_qr_login_task # Import tugas RQ
+from backend.forms import RegistrationForm, LoginForm, AiSettingsForm
+from PIL import Image # Untuk memproses gambar QR
+import io # Untuk memproses gambar QR
+
 # Secara eksplisit tambahkan direktori proyek ke sys.path
 # Ini memastikan Python dapat menemukan 'backend' sebagai paket.
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
@@ -16,13 +24,11 @@ if project_root not in sys.path:
     
 from backend.models import db, User, ProcessedVideo, ProcessedComment
 from backend.forms import RegistrationForm, LoginForm, AiSettingsForm
+from backend.tasks import enqueue_qr_login_task
 
 # HAPUS: run_tiktok_bot_task dan generate_qr_and_wait_for_login tidak lagi dipanggil di Flask app
 # from akses_komen.bot import run_tiktok_bot_task 
 # from akses_komen.qr_login_service import generate_qr_and_wait_for_login, QR_CODE_TEMP_DIR
-
-from flask_login import LoginManager, login_user, logout_user, login_required, current_user 
-from werkzeug.security import generate_password_hash, check_password_hash 
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'kunci_rahasia_anda_yang_sangat_aman_dan_sulit_ditebak' 
@@ -30,7 +36,6 @@ app.config['SECRET_KEY'] = 'kunci_rahasia_anda_yang_sangat_aman_dan_sulit_diteba
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
 db_path = os.path.join(project_root, 'site.db')
 app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # CORS(app) 
@@ -48,6 +53,13 @@ login_manager.login_message_category = "warning"
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
+
+
+# --- Konfigurasi Redis & RQ Queue ---
+REDIS_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
+redis_conn = redis.from_url(REDIS_URL)
+q = Queue(connection=redis_conn)
+print(f"RQ Queue terinisialisasi dengan Redis di: {REDIS_URL}")
 
 # ===============================================
 # API Key Authentication untuk Bot Workers
@@ -72,6 +84,9 @@ def api_key_auth():
         'upload_qr_image_api', 
         'get_active_users_for_bot',
         'save_processed_comment_api', 
+        'api_update_user_qr_status',
+        'api_update_user_cookies_status',
+        'api_upload_qr_image'
     ]
 
     if request.endpoint in api_key_endpoints:
@@ -99,7 +114,7 @@ def register():
         db.session.add(new_user)
         db.session.commit()
         flash('Akun Anda berhasil didaftarkan! Silakan masuk.', 'success')
-        return redirect(url_for('login'))
+        return redirect(url_for('dashboard'))
     return render_template('register.html', form=form)
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -144,13 +159,19 @@ def tiktok_connect():
     
     cookies_present = bool(user.cookies_json and json.loads(user.cookies_json))
     
+    qr_process_active = user.qr_process_active
+    qr_generated_at = user.qr_generated_at
+    
+    
     # URL untuk gambar QR code (akan dilayani oleh serve_qr_code)
     qr_image_url = url_for('serve_qr_code', filename=f'qrcode_{user.id}.png')
     
     return render_template('tiktok_connect.html', 
                             cookies_present=cookies_present, 
                             tiktok_username=user.tiktok_username,
-                            qr_image_url=qr_image_url)
+                            qr_image_url=qr_image_url,
+                            qr_process_active=qr_process_active, # BARU: Lewatkan ke template
+                            qr_generated_at=qr_generated_at.isoformat() if qr_generated_at else None) # BARU: Lewatkan ke template
 
 
 @app.route('/ai_settings', methods=['GET', 'POST'])
@@ -324,21 +345,24 @@ def api_trigger_qr_login():
         return jsonify({"message": "User tidak ditemukan."}), 404
     
     try:
-        if user.cookies_json and json.loads(user.cookies_json):
-            user.cookies_json = json.dumps([]) # Paksa user untuk login ulang
-            db.session.add(user)
-            db.session.commit()
-            # Juga hapus QR code image yang ada di VPS agar UI tidak menampilkan yang lama
-            qr_image_path = os.path.join(QR_CODE_TEMP_DIR_SERVER, f'qrcode_{user.id}.png')
-            if os.path.exists(qr_image_path):
-                os.remove(qr_image_path)
-                print(f"QR code lama untuk user {user.id} dihapus dari VPS.")
-        
-        # Kita tidak memanggil bot secara langsung dari sini,
-        # melainkan mengandalkan worker.py untuk mendeteksi user ini perlu login lagi.
-        # Ini akan terjadi di siklus pengecekan tugas worker.py berikutnya.
+        # BARU: Atur status QR process menjadi aktif di database
+        user.qr_process_active = True
+        user.qr_generated_at = datetime.utcnow()
+        user.cookies_json = json.dumps([]) # Pastikan cookies dikosongkan untuk pemicuan login baru
 
-        return jsonify({"message": "Proses QR login akan dimulai ulang pada siklus bot berikutnya. Mohon tunggu beberapa saat untuk QR code baru muncul."}), 200
+        db.session.add(user)
+        db.session.commit()
+
+        # Enqueue tugas QR login ke RQ
+        enqueue_qr_login_task(user.id) # Panggil fungsi dari tasks.py
+
+        # Juga hapus QR code image yang ada di VPS agar UI tidak menampilkan yang lama
+        qr_image_path = os.path.join(QR_CODE_TEMP_DIR_SERVER, f'qrcode_{user.id}.png')
+        if os.path.exists(qr_image_path):
+            os.remove(qr_image_path)
+            print(f"QR code lama untuk user {user.id} dihapus dari VPS.")
+        
+        return jsonify({"message": "Proses QR login akan dimulai. Mohon tunggu beberapa saat untuk QR code baru muncul."}), 200
     except Exception as e:
         db.session.rollback()
         return jsonify({"message": f"Gagal memicu proses QR login: {e}"}), 500
@@ -355,9 +379,72 @@ def api_get_user_settings_for_ui():
         "user_id": user.id,
         "username": user.username,
         "tiktok_username": user.tiktok_username,
-        "cookies_json": user.cookies_json # Kirim cookies_json untuk cek status di frontend
+        "cookies_json": user.cookies_json, # Kirim cookies_json untuk cek status di frontend
+        "qr_process_active": user.qr_process_active, # Kirim status QR
+        "qr_generated_at": user.qr_generated_at.isoformat() if user.qr_generated_at else None # Kirim timestamp QR
     }), 200
     
+# BARU: Endpoint API untuk bot worker memperbarui status QR process
+@app.route('/api/users/<int:user_id>/update_qr_status', methods=['POST'])
+def api_update_user_qr_status(user_id):
+    data = request.get_json()
+    qr_process_active = data.get('qr_process_active')
+    qr_generated_at_str = data.get('qr_generated_at')
+
+    if qr_process_active is None: # Cukup cek qr_process_active
+        return jsonify({"message": "Status aktif QR diperlukan."}), 400
+    
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({"message": "User tidak ditemukan."}), 404
+    
+    try:
+        user.qr_process_active = bool(qr_process_active)
+        if qr_generated_at_str:
+            user.qr_generated_at = datetime.fromisoformat(qr_generated_at_str)
+        else:
+            user.qr_generated_at = None # Reset jika tidak ada timestamp
+
+        db.session.commit()
+        print(f"[{datetime.now()}] API: Status QR untuk user {user_id} diperbarui menjadi aktif={qr_process_active}, generated_at={qr_generated_at_str}")
+        return jsonify({"message": "Status QR process user berhasil diperbarui."}), 200
+    except Exception as e:
+        db.session.rollback()
+        print(f"[{datetime.now()}] API ERROR: Gagal memperbarui status QR untuk user {user_id}: {e}")
+        return jsonify({"message": f"Error memperbarui status QR process: {e}"}), 500
+
+
+@app.route('/api/users/<int:user_id>/update_cookies_status', methods=['POST'])
+def api_update_user_cookies_status(user_id):
+    data = request.get_json()
+    cookies_json = data.get('cookies_json')
+    
+
+    if cookies_json is None: # PERBAIKAN: Cukup cek cookies_json is None
+        return jsonify({"message": "cookies_json diperlukan."}), 400
+    
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({"message": "User tidak ditemukan."}), 404    
+    
+    try:
+        user.cookies_json = cookies_json
+        user.qr_process_active = False # Pastikan status QR dinonaktifkan
+        user.qr_generated_at = None # Reset timestamp
+        db.session.commit()
+
+        # Hapus file QR code di server jika ada
+        qr_image_path = os.path.join(QR_CODE_TEMP_DIR_SERVER, f'qrcode_{user_id}.png')
+        if os.path.exists(qr_image_path):
+            os.remove(qr_image_path)
+            print(f"[{datetime.now()}] API: QR code lama untuk user {user_id} dihapus dari VPS.")
+
+        print(f"[{datetime.now()}] API: Cookies user dan status QR berhasil diperbarui.")
+        return jsonify({"message": "Cookies user dan status QR berhasil diperbarui."}), 200
+    except Exception as e:
+        db.session.rollback()
+        print(f"[{datetime.now()}] API ERROR: Gagal memperbarui cookies dan status QR untuk user {user_id}: {e}")
+        return jsonify({"message": f"Error memperbarui cookies dan status QR: {e}"}), 500
 
 
 # Endpoint untuk pengaturan creator (melalui UI, otentikasi Flask-Login)
@@ -553,7 +640,9 @@ def get_user_settings_api(user_id):
         "is_active": user.is_active,
         "daily_run_count": user.daily_run_count,
         "last_run_at": user.last_run_at.isoformat() if user.last_run_at else None,
-        "cookies_json": user.cookies_json # Mengembalikan cookies sebagai JSON string
+        "cookies_json": user.cookies_json, # Mengembalikan cookies sebagai JSON string
+        "qr_process_active": user.qr_process_active, # BARU: Tambahkan status QR
+        "qr_generated_at": user.qr_generated_at.isoformat() if user.qr_generated_at else None # BARU: Tambahkan timestamp QR
     }), 200
 
 @app.route('/api/users/<int:user_id>/cookies', methods=['POST'])
@@ -574,13 +663,26 @@ def update_user_cookies_api(user_id):
     
     try:
         user.cookies_json = cookies_json # Simpan langsung sebagai JSON string
+        # BARU: Reset status QR setelah cookies berhasil disimpan
+        user.qr_process_active = False
+        user.qr_generated_at = None
+
+        # Hapus file QR code di server jika ada (karena login sudah berhasil)
+        qr_image_path = os.path.join(QR_CODE_TEMP_DIR_SERVER, f'qrcode_{user_id}.png')
+        if os.path.exists(qr_image_path):
+            os.remove(qr_image_path)
+            print(f"[{datetime.now()}] API: QR code lama untuk user {user_id} dihapus dari VPS (setelah cookies diterima).")
+
         db.session.add(user)
         db.session.commit()
+        print(f"[{datetime.now()}] API: Cookies dan status QR untuk user {user_id} berhasil diperbarui.")
         return jsonify({"message": "Cookies updated successfully!"}), 200
     except Exception as e:
         db.session.rollback()
+        print(f"[{datetime.now()}] API ERROR: Gagal memperbarui cookies dan status QR untuk user {user_id}: {e}")
         return jsonify({"message": f"Error updating cookies: {e}"}), 500
-
+ 
+ 
 @app.route('/api/users/<int:user_id>/last_run', methods=['POST'])
 def update_user_last_run_api(user_id):
     """
@@ -720,18 +822,39 @@ def upload_qr_image_api(user_id):
     Menerima gambar QR code dari bot lokal dan menyimpannya di direktori sementara VPS.
     Membutuhkan API Key.
     """
-    if 'file' not in request.files:
-        return jsonify({"message": "No file part in the request"}), 400
-    file = request.files['file']
+    if 'qr_image' not in request.files: # PERUBAHAN: Cek 'qr_image' sebagai key
+        return jsonify({"message": "File gambar QR tidak ditemukan."}), 400    
+
+    file = request.files['qr_image'] # PERBAIKAN: Mengambil file dari 'qr_image'
     if file.filename == '':
-        return jsonify({"message": "No selected file"}), 400
+        return jsonify({"message": "Nama file kosong."}), 400
     
     if file:
-        filename = f"qrcode_{user_id}.png"
-        file_path = os.path.join(QR_CODE_TEMP_DIR_SERVER, filename)
-        file.save(file_path)
-        return jsonify({"message": "QR image uploaded successfully", "filename": filename}), 200
-    return jsonify({"message": "Failed to upload QR image"}), 500
+        try:
+            filename = f'qrcode_{user_id}.png'
+            filepath = os.path.join(QR_CODE_TEMP_DIR_SERVER, filename)
+            
+            # Baca gambar menggunakan PIL untuk memastikan ukurannya minimal 250x250
+            img = Image.open(io.BytesIO(file.read()))
+            
+            # Pastikan ukuran gambar minimal 250x250, jika lebih kecil, resize
+            if img.width < 250 or img.height < 250:
+                print(f"[{datetime.now()}] Peringatan: Gambar QR code untuk user {user_id} terlalu kecil ({img.width}x{img.height}). Mengubah ukurannya menjadi minimal 250x250.")
+                # Resize dengan mempertahankan aspek rasio, dan pastikan tidak memperkecil jika sudah lebih besar
+                ratio = min(250/img.width, 250/img.height) # Cari rasio terkecil
+                new_width = int(img.width * ratio) if img.width < 250 else img.width
+                new_height = int(img.height * ratio) if img.height < 250 else img.height
+                img = img.resize((new_width, new_height), Image.LANCZOS)
+                # Jika setelah resize masih ada sisi yang kurang dari 250 (misal dari rasio berbeda), pangkas atau tambahkan padding
+                # Untuk saat ini, kita hanya memastikan ukuran minimal.
+            
+            img.save(filepath)
+
+            print(f"[{datetime.now()}] API: QR code untuk user {user_id} berhasil diupload dan disimpan di {filepath}")
+            return jsonify({"message": "QR code berhasil diupload."}), 200
+        except Exception as e:
+            print(f"[{datetime.now()}] API ERROR: Gagal memproses atau menyimpan QR code yang diupload: {e}")
+            return jsonify({"message": f"Gagal memproses atau menyimpan QR code: {e}"}), 500
 
 # BARU: Endpoint untuk bot worker mengambil daftar user aktif yang perlu diproses
 @app.route('/api/active_users_for_bot', methods=['GET'])

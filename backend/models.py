@@ -22,6 +22,8 @@ class User(db.Model, UserMixin): # Tambahkan UserMixin di sini
     daily_run_count = db.Column(db.Integer, default=0)
     last_run_at = db.Column(db.DateTime, nullable=True)
     cookies_json = db.Column(db.Text, nullable=True) # Akan menyimpan cookies TikTok
+    qr_process_active = db.Column(db.Boolean, default=False, nullable=False)
+    qr_generated_at = db.Column(db.DateTime, nullable=True)
 
     # Relasi ke model ProcessedVideo yang baru
     processed_videos = db.relationship('ProcessedVideo', backref='user', lazy=True)

@@ -91,6 +91,52 @@ class APIClient:
         print(f"Memperbarui last_run_at untuk user {user_id} melalui API...")
         return self._make_request("POST", f"api/users/{user_id}/last_run")
 
+    def save_processed_comment(self, processed_video_id: int, tiktok_comment_id: Optional[str], comment_text: str, reply_text: Optional[str], is_replied: bool, llm_raw_decision: Optional[str]):
+        endpoint = "/api/save_processed_comment"
+        data = {
+            "processed_video_id": processed_video_id,
+            "tiktok_comment_id": tiktok_comment_id,
+            "comment_text": comment_text,
+            "reply_text": reply_text,
+            "is_replied": is_replied,
+            "llm_raw_decision": llm_raw_decision
+        }
+        return self._make_request("POST", endpoint, json_data=data)
+    
+    def update_user_qr_status(self, user_id: int, qr_process_active: bool, qr_generated_at: Optional[str] = None):
+        """
+        Memperbarui status qr_process_active dan qr_generated_at untuk user di VPS.
+        qr_generated_at harus dalam format ISO 8601 string jika disediakan.
+        """
+        endpoint = "/api/update_user_qr_status"
+        data = {
+            "user_id": user_id,
+            "qr_process_active": qr_process_active,
+            "qr_generated_at": qr_generated_at
+        }
+        return self._make_request("POST", endpoint, json_data=data)
+
+    def update_user_cookies_and_qr_status(self, user_id: int, cookies_json: str):
+        """
+        Mengirim cookies yang berhasil login dan mengatur qr_process_active = False serta qr_generated_at = None.
+        """
+        endpoint = "/api/update_user_cookies_status"
+        data = {
+            "user_id": user_id,
+            "cookies_json": cookies_json
+        }
+        return self._make_request("POST", endpoint, json_data=data)
+        
+    # BARU: Metode untuk UI mendapatkan pengaturan user (termasuk cookies_json)
+    def get_user_settings_for_ui(self) -> Dict[str, Any]:
+        print(f"Mengambil pengaturan user saat ini untuk UI dari API...")
+        # Endpoint ini perlu dikoreksi di app.py untuk mengambil current_user.id
+        # Untuk APIClient ini, kita tidak memiliki current_user.id langsung
+        # Jadi endpoint ini hanya bisa dipanggil oleh UI (Flask app itu sendiri)
+        # Mari kita asumsikan untuk sementara bahwa ini tidak dipanggil oleh bot worker
+        # Jika bot worker perlu mengambil settings untuk UI, perlu user_id
+        raise NotImplementedError("This method is intended for UI to call itself, not the bot worker.")
+
     def upload_qr_image_to_vps(self, user_id: int, image_path: str):
         """
         Mengupload gambar QR code dari lokal ke VPS agar bisa diakses oleh frontend.
