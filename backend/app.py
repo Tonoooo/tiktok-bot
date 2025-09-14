@@ -864,7 +864,7 @@ def get_active_users_for_bot():
     Membutuhkan API Key.
     """
     try:
-        current_time = datetime.now()
+    current_time = datetime.now()
         # Ambil semua user yang aktif
         active_users = User.query.filter_by(is_active=True).all()
         
