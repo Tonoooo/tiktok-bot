@@ -1,166 +1,104 @@
 import requests
 import json
-from typing import Dict, Any, Optional
 import os
-
+from typing import Optional, Dict, Any
 class APIClient:
     def __init__(self, base_url: str, api_key: str):
-        """
-        Menginisialisasi APIClient untuk berkomunikasi dengan Flask API.
-        
-        Args:
-            base_url (str): URL dasar API Flask (contoh: "http://103.52.114.253:5000").
-            api_key (str): Kunci API untuk otentikasi bot ke Flask API.
-        """
         self.base_url = base_url
         self.api_key = api_key
-        # Kita akan menggunakan API Key di header untuk otentikasi sederhana
-        self.headers = {"X-API-Key": self.api_key, "Content-Type": "application/json"}
-        print(f"APIClient diinisialisasi dengan base_url: {base_url}")
-
-    def _make_request(self, method: str, endpoint: str, data: Optional[Dict[str, Any]] = None, params: Optional[Dict[str, Any]] = None) -> Any:
-        """
-        Membuat permintaan HTTP umum ke API.
-        """
-        url = f"{self.base_url}/{endpoint}"
+        print(f"APIClient diinisialisasi dengan base_url: {self.base_url}")
+    def _make_request(self, method: str, endpoint: str, params: Optional[Dict] = None, json_data: Optional[Dict] = None, files: Optional[Dict] = None) -> Dict:
+        url = f"{self.base_url}{endpoint}"
+        headers = {"X-API-Key": self.api_key}
+        
         try:
             if method == "GET":
-                response = requests.get(url, headers=self.headers, params=params)
+                response = requests.get(url, headers=headers, params=params, timeout=30)
             elif method == "POST":
-                response = requests.post(url, headers=self.headers, json=data)
-            elif method == "PUT": # Akan berguna jika kita perlu mengupdate record
-                response = requests.put(url, headers=self.headers, json=data)
+                if files: # Jika ada file untuk diupload
+                    response = requests.post(url, headers=headers, params=params, files=files, timeout=30)
+                else: # Jika hanya data JSON
+                    response = requests.post(url, headers=headers, params=params, json=json_data, timeout=30) # PERBAIKAN: Gunakan json=json_data
+            # ... (metode PUT, DELETE jika ada)
             else:
-                raise ValueError(f"Metode HTTP {method} tidak didukung.")
-
-            response.raise_for_status() # Akan menimbulkan HTTPError untuk respons 4xx atau 5xx
+                raise ValueError(f"Metode HTTP tidak didukung: {method}")
+            response.raise_for_status() # Raise HTTPError for bad responses (4xx or 5xx)
             return response.json()
+        except requests.exceptions.Timeout:
+            print(f"ERROR: Permintaan API ke {url} timeout setelah 30 detik.")
+            raise
         except requests.exceptions.RequestException as e:
-            print(f"ERROR API Request Gagal: {e}")
+            print(f"ERROR: Kesalahan API saat meminta {url}: {e}")
             if hasattr(e, 'response') and e.response is not None:
-                print(f"Kode status respons: {e.response.status_code}")
-                print(f"Body respons: {e.response.text}")
-            raise # Lemparkan kembali exception setelah mencetak detailnya
-
-    def get_user_settings(self, user_id: int) -> Dict[str, Any]:
-        """
-        Mengambil pengaturan user dari API Flask.
-        """
-        print(f"Mengambil pengaturan user {user_id} dari API...")
-        return self._make_request("GET", f"api/users/{user_id}")
-
-    def update_user_cookies(self, user_id: int, cookies_json: str) -> Dict[str, Any]:
-        """
-        Memperbarui cookies login TikTok untuk user tertentu melalui API Flask.
-        """
-        print(f"Memperbarui cookies untuk user {user_id} melalui API...")
-        return self._make_request("POST", f"api/users/{user_id}/cookies", {"cookies_json": cookies_json})
-
-    def get_processed_video(self, user_id: int, video_url: str) -> Optional[Dict[str, Any]]:
-        """
-        Mengambil detail video yang sudah diproses (termasuk transkrip) dari API Flask.
-        Mengembalikan None jika video tidak ditemukan.
-        """
-        print(f"Mencari transkrip video untuk user {user_id} dan URL: {video_url} dari API...")
+                print(f"Response content: {e.response.text}")
+            raise
+    def get_user_settings(self, user_id: int) -> Optional[Dict]:
+        endpoint = f"/api/users/{user_id}"
         try:
-            # Karena video_url bisa panjang, kita kirim sebagai query parameter
-            # Flask API perlu diatur untuk menerima ini
-            return self._make_request("GET", f"api/processed_videos/by_url", params={"user_id": user_id, "video_url": video_url})
-        except requests.exceptions.HTTPError as e:
-            if e.response.status_code == 404:
-                print(f"Transkrip video untuk {video_url} tidak ditemukan di API (404).")
-                return None
-            raise # Lemparkan error lain yang tidak 404
-
-    def save_processed_video(self, user_id: int, video_url: str, transcript: str) -> Dict[str, Any]:
-        """
-        Menyimpan data video yang sudah diproses (termasuk transkrip) ke API Flask.
-        """
-        print(f"Menyimpan transkrip video untuk user {user_id} dan URL: {video_url} ke API...")
+            return self._make_request("GET", endpoint)
+        except Exception:
+            return None
+    def update_user_cookies(self, user_id: int, cookies_json: str):
+        endpoint = f"/api/users/{user_id}/cookies"
+        data = {"cookies_json": cookies_json}
+        return self._make_request("POST", endpoint, json_data=data) # PERBAIKAN: Gunakan json_data=data
+    def update_user_last_run_api(self, user_id: int):
+        endpoint = f"/api/users/{user_id}/last_run"
+        # Tidak ada data body yang diperlukan untuk endpoint ini, hanya pemicu POST
+        return self._make_request("POST", endpoint) # PERBAIKAN: Hapus json_data={} jika tidak ada body
+    def get_processed_video(self, user_id: int, video_url: str) -> Optional[Dict]:
+        endpoint = "/api/processed_videos/by_url"
+        params = {"user_id": user_id, "video_url": video_url}
+        try:
+            return self._make_request("GET", endpoint, params=params)
+        except Exception:
+            return None
+    def save_processed_video(self, user_id: int, video_url: str, transcript: str) -> Dict:
+        endpoint = "/api/processed_videos"
         data = {
             "user_id": user_id,
             "video_url": video_url,
             "transcript": transcript
         }
-        return self._make_request("POST", "api/processed_videos", data)
-
-    def update_user_last_run_api(self, user_id: int) -> Dict[str, Any]:
-        """
-        Memperbarui timestamp last_run_at untuk user tertentu melalui API Flask.
-        """
-        print(f"Memperbarui last_run_at untuk user {user_id} melalui API...")
-        return self._make_request("POST", f"api/users/{user_id}/last_run")
-
+        return self._make_request("POST", endpoint, json_data=data) # PERBAIKAN: Gunakan json_data=data
     def save_processed_comment(self, processed_video_id: int, tiktok_comment_id: Optional[str], comment_text: str, reply_text: Optional[str], is_replied: bool, llm_raw_decision: Optional[str]):
-        endpoint = "/api/save_processed_comment"
+        endpoint = f"/api/processed_videos/{processed_video_id}/comments"
         data = {
-            "processed_video_id": processed_video_id,
             "tiktok_comment_id": tiktok_comment_id,
             "comment_text": comment_text,
             "reply_text": reply_text,
             "is_replied": is_replied,
             "llm_raw_decision": llm_raw_decision
         }
-        return self._make_request("POST", endpoint, json_data=data)
-    
+        return self._make_request("POST", endpoint, json_data=data) # PERBAIKAN: Gunakan json_data=data
     def update_user_qr_status(self, user_id: int, qr_process_active: bool, qr_generated_at: Optional[str] = None):
-        """
-        Memperbarui status qr_process_active dan qr_generated_at untuk user di VPS.
-        qr_generated_at harus dalam format ISO 8601 string jika disediakan.
-        """
-        endpoint = "/api/update_user_qr_status"
+        endpoint = f"/api/users/{user_id}/update_qr_status"
         data = {
             "user_id": user_id,
             "qr_process_active": qr_process_active,
             "qr_generated_at": qr_generated_at
         }
-        return self._make_request("POST", endpoint, json_data=data)
-
+        return self._make_request("POST", endpoint, json_data=data) # PERBAIKAN: Gunakan json_data=data
     def update_user_cookies_and_qr_status(self, user_id: int, cookies_json: str):
-        """
-        Mengirim cookies yang berhasil login dan mengatur qr_process_active = False serta qr_generated_at = None.
-        """
-        endpoint = "/api/update_user_cookies_status"
+        endpoint = f"/api/users/{user_id}/update_cookies_status"
         data = {
             "user_id": user_id,
             "cookies_json": cookies_json
         }
-        return self._make_request("POST", endpoint, json_data=data)
-        
-    # BARU: Metode untuk UI mendapatkan pengaturan user (termasuk cookies_json)
-    def get_user_settings_for_ui(self) -> Dict[str, Any]:
-        print(f"Mengambil pengaturan user saat ini untuk UI dari API...")
-        # Endpoint ini perlu dikoreksi di app.py untuk mengambil current_user.id
-        # Untuk APIClient ini, kita tidak memiliki current_user.id langsung
-        # Jadi endpoint ini hanya bisa dipanggil oleh UI (Flask app itu sendiri)
-        # Mari kita asumsikan untuk sementara bahwa ini tidak dipanggil oleh bot worker
-        # Jika bot worker perlu mengambil settings untuk UI, perlu user_id
-        raise NotImplementedError("This method is intended for UI to call itself, not the bot worker.")
-
+        return self._make_request("POST", endpoint, json_data=data) # PERBAIKAN: Gunakan json_data=data
+    
     def upload_qr_image_to_vps(self, user_id: int, image_path: str):
-        """
-        Mengupload gambar QR code dari lokal ke VPS agar bisa diakses oleh frontend.
-        Metode ini dipindahkan ke APIClient untuk konsistensi.
-        """
-        print(f"Mengupload gambar QR code untuk user {user_id} ke VPS melalui APIClient...")
+        endpoint = f"/api/upload_qr_image/{user_id}"
         try:
             with open(image_path, 'rb') as f:
-                files = {'file': (os.path.basename(image_path), f, 'image/png')}
-                # Pastikan API_BOT_KEY disertakan di headers
-                response = requests.post(f"{self.base_url}/api/upload_qr_image/{user_id}", 
-                                         headers={"X-API-Key": self.api_key}, 
-                                         files=files)
-                response.raise_for_status()
-                print(f"Gambar QR code untuk user {user_id} berhasil diupload ke VPS.")
-                return response.json()
-        except requests.exceptions.RequestException as e:
+                # 'qr_image' adalah nama field yang diharapkan oleh Flask API (backend/app.py)
+                files = {'qr_image': (os.path.basename(image_path), f, 'image/png')}
+                response = self._make_request("POST", endpoint, files=files) # PERBAIKAN: Gunakan files=files
+                return response
+        except Exception as e:
             print(f"ERROR: Gagal mengupload gambar QR code untuk user {user_id} ke VPS: {e}")
-            raise # Re-raise the exception after logging
-
-    def get_active_users_for_bot(self) -> Dict[str, Any]:
-        """
-        Mengambil daftar user ID yang aktif dan perlu diproses oleh bot worker dari API Flask.
-        """
-        print("Mengambil daftar user aktif untuk bot dari API...")
-        return self._make_request("GET", "api/active_users_for_bot")
-    # Metode lain seperti untuk melaporkan komentar yang dibalas bisa ditambahkan di sini.
+            raise # Re-raise exception agar bisa ditangani di qr_login_service
+    
+    def get_active_users_for_bot(self) -> Dict:
+        endpoint = "/api/active_users_for_bot"
+        return self._make_request("GET", endpoint)

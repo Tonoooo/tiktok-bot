@@ -71,15 +71,15 @@ def run_tiktok_bot_task(user_id: int, api_client: APIClient):
         # =========================
         options = uc.ChromeOptions()
         options.add_argument('--headless') 
-        # options.add_argument('--disable-gpu') # Penting untuk kinerja dan rendering di beberapa sistem
+        options.add_argument('--disable-gpu') # Penting untuk kinerja dan rendering di beberapa sistem
         options.add_argument('--no-sandbox') # Penting untuk Linux/Docker
         options.add_argument('--disable-dev-shm-usage') # Mengatasi masalah resource
         options.add_argument('--window-size=1280,800') # Tetapkan ukuran jendela yang realistis
         options.add_argument('--disable-blink-features=AutomationControlled') # Anti-deteksi
-        options.add_argument(
-            '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
-            'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36'
-        ) # User-Agent yang umum
+        # options.add_argument(
+        #     '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+        #     'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36'
+        # ) # User-Agent yang umum
         options.add_argument('--disable-setuid-sandbox')
         options.add_argument('--lang=en-US,en;q=0.9') # Mengatur bahasa browser ke Inggris AS
         driver = uc.Chrome(options=options)

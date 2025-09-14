@@ -11,10 +11,18 @@ from selenium.common.exceptions import TimeoutException, WebDriverException, NoS
 # PERUBAHAN: Ganti import Flask, db, User dengan APIClient
 from akses_komen.api_client import APIClient 
 from datetime import datetime
+from datetime import timedelta
+
+VPS_API_BASE_URL = os.getenv('VPS_API_BASE_URL', "http://103.52.114.253:5000") # Sesuaikan dengan IP VPS Anda
+API_BOT_KEY = os.getenv('API_BOT_KEY', "super_secret_bot_key_123") # Sesuaikan dengan API Key Anda
 
 
 QR_CODE_TEMP_DIR = 'qr_codes_temp'
 os.makedirs(QR_CODE_TEMP_DIR, exist_ok=True)
+
+MAX_LOGIN_WAIT_TIME = 600 # detik (total 10 menit)
+QR_SCREENSHOT_INTERVAL = 10
+QR_CODE_REFRESH_THRESHOLD = 120
 
 # Helper function untuk membuka modal QR code
 def _open_tiktok_qr_modal(driver):
@@ -22,26 +30,38 @@ def _open_tiktok_qr_modal(driver):
     Mengklik tombol yang diperlukan untuk menampilkan modal login QR code.
     Mengembalikan True jika modal QR berhasil dipicu, False jika gagal.
     """
+    
+    try:
+        print("Menunggu overlay modal umum menghilang...")
+        WebDriverWait(driver, 10).until(
+            EC.invisibility_of_element_located((By.CSS_SELECTOR, '.TUXModal-overlay[data-transition-status="open"], .tiktok-modal__mask, .css-1y5c6h-DivMask'))
+        )
+        print("Overlay modal umum tidak terlihat.")
+    except TimeoutException:
+        print("Peringatan: Overlay modal umum masih terlihat atau tidak menghilang. Melanjutkan dengan hati-hati.")
+
+    
     try:
         # --------------------------------------- chose your interest ---------------------------------------
         print("Mencoba mendeteksi modal 'chose your interest'...")
-        overlay_locator = (By.CSS_SELECTOR, '.TUXModal-overlay[data-transition-status="open"]')
-        try:
-            WebDriverWait(driver, 3).until(EC.invisibility_of_element_located(overlay_locator))
-            print("Overlay modal awal tidak terlihat.")
-        except TimeoutException:
-            print("Peringatan: Overlay modal awal masih terlihat atau tidak menghilang. Melanjutkan.")
+        # HAPUS: Penantian overlay yang redundan di sini
+        # overlay_locator = (By.CSS_SELECTOR, '.TUXModal-overlay[data-transition-status="open"]')
+        # try:
+        #     WebDriverWait(driver, 15).until(EC.invisibility_of_element_located(overlay_locator))
+        #     print("Overlay modal awal tidak terlihat.")
+        # except TimeoutException:
+        #     print("Peringatan: Overlay modal awal masih terlihat atau tidak menghilang. Melanjutkan.")
 
         # jika modal 'chose your interest' muncul, klik tombol 'log in'
-        modal_interest_button = WebDriverWait(driver, 8).until( 
-            EC.presence_of_element_located((By.CSS_SELECTOR, '[data-e2e="bottom-login"]'))
+        modal_interest_button = WebDriverWait(driver, 15).until( # Tingkatkan timeout
+            EC.element_to_be_clickable((By.CSS_SELECTOR, '[data-e2e="bottom-login"]'))
         )
         modal_interest_button.click()
         print("Tombol 'log in' di modal 'chose your interest' diklik.")
-        time.sleep(5)
+        time.sleep(3) # Kurangi sleep jika bisa
 
         # MEMPERBARUI: Meningkatkan timeout untuk stabilitas
-        qr_button_interest = WebDriverWait(driver, 8).until( 
+        qr_button_interest = WebDriverWait(driver, 10).until( 
             EC.element_to_be_clickable((By.XPATH, "//div[@role='link' and .//div[text()='Use QR code']]"))
         )
         qr_button_interest.click()
@@ -53,12 +73,12 @@ def _open_tiktok_qr_modal(driver):
         print(f"Modal 'chose your interest' atau QR button tidak ditemukan, mencoba alur 'Ikuti'. Error: {e}")
         try:
             # MEMPERBAIKI: Pastikan overlay modal tidak ada sebelum mengklik (jika ada)
-            overlay_locator = (By.CSS_SELECTOR, '.TUXModal-overlay[data-transition-status="open"]')
-            try:
-                WebDriverWait(driver, 3).until(EC.invisibility_of_element_located(overlay_locator))
-                print("Overlay modal awal tidak terlihat.")
-            except TimeoutException:
-                print("Peringatan: Overlay modal awal masih terlihat atau tidak menghilang. Melanjutkan.")
+            # overlay_locator = (By.CSS_SELECTOR, '.TUXModal-overlay[data-transition-status="open"]')
+            # try:
+            #     WebDriverWait(driver, 3).until(EC.invisibility_of_element_located(overlay_locator))
+            #     print("Overlay modal awal tidak terlihat.")
+            # except TimeoutException:
+            #     print("Peringatan: Overlay modal awal masih terlihat atau tidak menghilang. Melanjutkan.")
 
             follow_button = WebDriverWait(driver, 10).until( 
                 EC.element_to_be_clickable((By.CSS_SELECTOR, '[data-e2e="follow-button"]'))
@@ -68,7 +88,7 @@ def _open_tiktok_qr_modal(driver):
             time.sleep(3)
 
             # MEMPERBARUI: Meningkatkan timeout untuk stabilitas
-            qr_button = WebDriverWait(driver, 8).until( 
+            qr_button = WebDriverWait(driver, 10).until( 
                 EC.element_to_be_clickable((By.XPATH, "//div[@role='link' and .//div[text()='Use QR code']]"))
             )
             qr_button.click()
@@ -96,10 +116,11 @@ def _capture_save_and_upload_qr_code(driver, user_id, api_client, qr_canvas_elem
 
             # Selalu coba upload ke VPS jika QR code berhasil diambil
             try:
-                api_client.upload_qr_image_to_vps(user_id, qr_image_path)
+                # Pastikan metode upload_qr_image_to_vps di api_client.py sudah menggunakan parameter 'files' dengan benar
+                api_client.upload_qr_image_to_vps(user_id, qr_image_path) 
                 print(f"QR code untuk user {user_id} berhasil diupload ke VPS.")
             except Exception as upload_e:
-                print(f"ERROR: Gagal mengupload gambar QR code ke VPS: {upload_e}")
+                print(f"ERROR: Gagal mengupload gambar QR code untuk user {user_id} ke VPS: {upload_e}")
             return True
         else:
             print("Peringatan: Data URI QR code tidak valid atau kosong.")
@@ -111,8 +132,12 @@ def _capture_save_and_upload_qr_code(driver, user_id, api_client, qr_canvas_elem
         print(f"ERROR: Gagal mendapatkan data QR code dari canvas: {e}.")
         return False
 
-def generate_qr_and_wait_for_login(user_id: int, api_client: APIClient):
+def generate_qr_and_wait_for_login(user_id: int): # Sudah benar, tanpa api_client di signature
     print(f"[{datetime.now()}] Memulai tugas generate_qr_and_wait_for_login untuk user_id: {user_id}")
+    
+    # Ini sudah benar, APIClient diinisialisasi di sini
+    api_client = APIClient(VPS_API_BASE_URL, API_BOT_KEY)
+    
     driver = None
     qr_image_path = os.path.join(QR_CODE_TEMP_DIR, f'qrcode_{user_id}.png')
     
@@ -122,6 +147,7 @@ def generate_qr_and_wait_for_login(user_id: int, api_client: APIClient):
         print(f"QR code lama untuk user {user_id} dihapus.")
             
     try:
+        # Panggil api_client yang baru diinisialisasi
         api_client.update_user_qr_status(user_id, qr_process_active=True, qr_generated_at=datetime.utcnow().isoformat())
         print(f"[{datetime.now()}] Berhasil memberi tahu VPS: proses QR login dimulai.")
     except Exception as e:
@@ -135,26 +161,30 @@ def generate_qr_and_wait_for_login(user_id: int, api_client: APIClient):
         # =========================
         options = uc.ChromeOptions()
         options.add_argument('--headless') # Jalankan browser tanpa GUI
-        # options.add_argument('--disable-gpu') # Diperlukan untuk headless di beberapa sistem
+        options.add_argument('--disable-gpu') # Diperlukan untuk headless di beberapa sistem
         options.add_argument('--no-sandbox') # Diperlukan untuk headless di Linux server
         options.add_argument('--disable-dev-shm-usage') # Mengatasi masalah resource di Docker/VPS
         options.add_argument('--window-size=1280,800') # Tetapkan ukuran jendela yang realistis
         options.add_argument('--disable-blink-features=AutomationControlled') # Anti-deteksi
-        options.add_argument(
-            '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
-            'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36'
-        ) # User-Agent yang umum
+        # options.add_argument(
+        #      '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+        #      'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36'
+        # ) # User-Agent yang umum
         options.add_argument('--disable-setuid-sandbox')
         options.add_argument('--lang=en-US,en;q=0.9') # Mengatur bahasa browser ke Inggris AS
         driver = uc.Chrome(options=options)
 
         print(f"WebDriver berhasil diinisialisasi untuk user {user_id}.") 
 
-        # PERUBAHAN: Mengambil user settings dari APIClient
+        # Mengambil user settings dari APIClient
         user_settings = api_client.get_user_settings(user_id)
         if not user_settings:
             print(f"ERROR: User {user_id} tidak ditemukan di API atau gagal mengambil pengaturan.")
-            return False
+            try:
+                api_client.update_user_qr_status(user_id, qr_process_active=False, qr_generated_at=None)
+            except Exception as update_e:
+                print(f"[{datetime.now()}] ERROR: Gagal memperbarui status QR di VPS setelah gagal ambil settings: {update_e}")
+            return False        
 
         tiktok_username = user_settings.get('tiktok_username')
         
@@ -211,11 +241,11 @@ def generate_qr_and_wait_for_login(user_id: int, api_client: APIClient):
             return False
 
         login_successful = False
-        MAX_LOGIN_WAIT_TIME = 600 # detik (total 10 menit)
+        # MAX_LOGIN_WAIT_TIME = 600 # detik (total 10 menit)
         RECHECK_INTERVAL = 5 # detik, untuk cek status
 
         # Interval dan waktu terakhir untuk mengambil screenshot QR code
-        QR_SCREENSHOT_INTERVAL = 10
+        # QR_SCREENSHOT_INTERVAL = 10
         last_screenshot_time = time.time()
 
         start_time = time.time()
@@ -264,7 +294,6 @@ def generate_qr_and_wait_for_login(user_id: int, api_client: APIClient):
 
 
                 # PRIORITAS UTAMA 1: Modal QR code menghilang
-                # PERUBAHAN: Gunakan RECHECK_INTERVAL sebagai timeout. Jika gagal, loop akan berlanjut dan QR terupdate.
                 print(f"Menunggu modal QR code menghilang (maks {RECHECK_INTERVAL} detik)...")
                 WebDriverWait(driver, RECHECK_INTERVAL).until( 
                     EC.invisibility_of_element_located((By.CSS_SELECTOR, '[data-e2e="qr-code"]'))
