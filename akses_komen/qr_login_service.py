@@ -116,11 +116,14 @@ def _capture_save_and_upload_qr_code(driver, user_id, api_client, qr_canvas_elem
 
             # Selalu coba upload ke VPS jika QR code berhasil diambil
             try:
-                # Pastikan metode upload_qr_image_to_vps di api_client.py sudah menggunakan parameter 'files' dengan benar
-                api_client.upload_qr_image_to_vps(user_id, qr_image_path) 
+                api_client.upload_qr_image_to_vps(user_id, qr_image_path)
                 print(f"QR code untuk user {user_id} berhasil diupload ke VPS.")
+                # BARU: Perbarui qr_generated_at di VPS saat QR code berhasil di-upload
+                # Ini akan menjadi timestamp acuan untuk frontend
+                api_client.update_user_qr_status(user_id, qr_process_active=True, qr_generated_at=datetime.utcnow().isoformat())
+                print(f"[{datetime.now()}] QR_CODE_GENERATED_AT diperbarui di VPS.")
             except Exception as upload_e:
-                print(f"ERROR: Gagal mengupload gambar QR code untuk user {user_id} ke VPS: {upload_e}")
+                print(f"ERROR: Gagal mengupload gambar QR code atau memperbarui timestamp di VPS: {upload_e}")
             return True
         else:
             print("Peringatan: Data URI QR code tidak valid atau kosong.")
