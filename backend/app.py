@@ -347,7 +347,7 @@ def api_trigger_qr_login():
     try:
         # BARU: Atur status QR process menjadi aktif di database
         user.qr_process_active = True
-        user.qr_generated_at = None
+        user.qr_generated_at = datetime.utcnow().isoformat() + "Z"
         user.cookies_json = json.dumps([]) # Pastikan cookies dikosongkan untuk pemicuan login baru
 
         db.session.add(user)
