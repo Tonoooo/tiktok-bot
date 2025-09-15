@@ -163,7 +163,7 @@ def generate_qr_and_wait_for_login(user_id: int): # Sudah benar, tanpa api_clien
         # STEALTH HEADLESS OPTIONS
         # =========================
         options = uc.ChromeOptions()
-        options.add_argument('--headless') # Jalankan browser tanpa GUI
+        # options.add_argument('--headless') # Jalankan browser tanpa GUI
         options.add_argument('--disable-gpu') # Diperlukan untuk headless di beberapa sistem
         options.add_argument('--no-sandbox') # Diperlukan untuk headless di Linux server
         options.add_argument('--disable-dev-shm-usage') # Mengatasi masalah resource di Docker/VPS

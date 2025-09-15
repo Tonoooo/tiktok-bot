@@ -52,13 +52,13 @@ with app.app_context():
         raise e 
 
     # --- Contoh user dan pengaturan creator (digabung dalam tabel User) ---
-    hashed_password = generate_password_hash("password_aman")
+    hashed_password = generate_password_hash("123456789")
 
     # Cek apakah user sudah ada untuk mencegah duplikasi jika script dijalankan berkali-kali
     if not User.query.filter_by(username='admin').first():
         user1 = User(
-            username='admin', 
-            email='admin@gmail.com', 
+            username='cozy', 
+            email='balanjan.id.pusat@gmail.com', 
             password_hash=hashed_password,
             tiktok_username='cozy_kilo', # Digabung dari CreatorSettings
             creator_character_description='pria, usia 20-an, tegas, suka humor, sering menggunakan kata "mantap"', # Digabung
@@ -69,10 +69,10 @@ with app.app_context():
         )
         db.session.add(user1)
         db.session.commit() # Commit user dulu untuk mendapatkan ID
-        print("User 'admin' (dengan pengaturan creator) ditambahkan.")
+        print("User 'cozy' (dengan pengaturan creator) ditambahkan.")
     else:
-        user1 = User.query.filter_by(username='admin').first()
-        print("User 'admin' sudah ada.")
+        user1 = User.query.filter_by(username='cozy').first()
+        print("User 'cozy' sudah ada.")
 
     # --- Contoh data ProcessedVideo (Opsional, untuk testing) ---
     # Jika Anda ingin menambahkan contoh video yang sudah diproses secara manual
