@@ -45,6 +45,14 @@ def enqueue_comment_processing_task(user_id: int):
     print(f"Tugas pemrosesan komentar untuk user {user_id} di antrean RQ: {job.id}")
     return job
 
+def heartbeat_task(worker_id: str):
+    """
+    Sebuah tugas sederhana untuk menjaga koneksi Redis tetap hidup dan memberi sinyal aktivitas worker.
+    Tugas ini tidak melakukan apa-apa; tujuannya hanya untuk diantrekan dan diproses
+    untuk menjaga aktivitas koneksi.
+    """
+    print(f"[{datetime.now()}] Heartbeat diterima dari worker: {worker_id}")
+
 # Fungsi yang akan dipanggil oleh worker.py
 # Ini hanya untuk memastikan RQ dapat mengimpor dan menjalankannya
 if __name__ == '__main__':
