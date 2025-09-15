@@ -14,6 +14,8 @@ from akses_komen.qr_login_service import generate_qr_and_wait_for_login
 from akses_komen.bot import run_tiktok_bot_task
 from akses_komen.api_client import APIClient # Bot functions still need APIClient
 
+from akses_komen.qr_login_service import MAX_LOGIN_WAIT_TIME
+
 # --- Konfigurasi Redis & RQ Queue (Harus sama dengan di app.py) ---
 REDIS_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0') # Menggunakan variabel lingkungan atau default
 redis_conn = redis.from_url(REDIS_URL)
@@ -29,8 +31,8 @@ def enqueue_qr_login_task(user_id: int):
     # NOTE: generate_qr_and_wait_for_login akan memanggil APIClient di dalamnya.
     # Kita perlu memastikan APIClient diakses dari konteks Flask (jika dibutuhkan)
     # atau diinisialisasi di dalam worker environment (sudah dilakukan di worker.py)
-    job = q.enqueue(generate_qr_and_wait_for_login, user_id)
-    print(f"Tugas QR login untuk user {user_id} di antrean RQ: {job.id}")
+    job = q.enqueue(generate_qr_and_wait_for_login, user_id, job_timeout=MAX_LOGIN_WAIT_TIME)
+    print(f"Tugas QR login untuk user {user_id} di antrean RQ dengan timeout {MAX_LOGIN_WAIT_TIME}s: {job.id}")
     return job
 
 def enqueue_comment_processing_task(user_id: int):
