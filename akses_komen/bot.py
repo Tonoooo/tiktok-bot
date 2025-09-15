@@ -682,18 +682,18 @@ def run_tiktok_bot_task(user_id: int, api_client: APIClient):
                         else: 
                             print("Driver tidak aktif. Mencoba inisialisasi ulang.")
                             options = uc.ChromeOptions()
-                            # options.add_argument('--headless=new') # DIKOMENTARI
-                            # options.add_argument('--disable-gpu')
-                            # options.add_argument('--no-sandbox')
-                            # options.add_argument('--disable-dev-shm-usage')
-                            # options.add_argument('--window-size=1280,800')
-                            # options.add_argument('--disable-blink-features=AutomationControlled')
+                            options.add_argument('--headless')
+                            options.add_argument('--disable-gpu')
+                            options.add_argument('--no-sandbox')
+                            options.add_argument('--disable-dev-shm-usage')
+                            options.add_argument('--window-size=1280,800')
+                            options.add_argument('--disable-blink-features=AutomationControlled')
                             # options.add_argument(
                             #     '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
                             #     'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36'
                             # )
-                            # options.add_argument('--disable-setuid-sandbox')
-                            # options.add_argument('--lang=en-US,en;q=0.9')
+                            options.add_argument('--disable-setuid-sandbox')
+                            options.add_argument('--lang=en-US,en;q=0.9')
 
                             try:
                                 driver = uc.Chrome(options=options)

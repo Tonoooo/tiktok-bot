@@ -157,6 +157,11 @@ def tiktok_connect():
         flash("User tidak ditemukan.", "danger")
         return redirect(url_for('dashboard'))
     
+        # BARU: Periksa apakah tiktok_username sudah diatur
+    if not user.tiktok_username:
+        flash('Silakan isi Username TikTok Anda di Pengaturan AI sebelum menghubungkan akun.', 'warning')
+        return redirect(url_for('ai_settings')) # Arahkan ke halaman AI Settings
+    
     cookies_present = bool(user.cookies_json and json.loads(user.cookies_json))
     
     qr_process_active = user.qr_process_active
