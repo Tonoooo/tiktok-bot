@@ -1,0 +1,236 @@
+{% extends "base.html" %}
+
+{% block title %}Uji Coba AI Auto-Responder{% endblock %}
+
+{% block content %}
+<div class="container mx-auto p-4 max-w-2xl">
+    <h1 class="text-3xl font-bold text-gray-900 mb-6 text-center">Langkah Terakhir: Jalankan Uji Coba Gratis!</h1>
+
+    {% if user.is_subscribed %}
+        {# Jika user sudah berlangganan, seharusnya middleware sudah mengalihkan ke dashboard. #}
+        {# Ini adalah fallback jika entah mengapa user sampai di sini. #}
+        <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative mb-6">
+            <strong class="font-bold">Selamat!</strong>
+            <span class="block sm:inline">Anda sudah berlangganan Sitono AI. Anda bisa melihat status bot di <a href="{{ url_for('dashboard') }}" class="underline">Dashboard</a>.</span>
+        </div>
+    {% elif user.onboarding_stage == 'TRIAL_COMPLETED' %}
+        {# Status: Uji coba selesai, tampilkan CTA untuk berlangganan #}
+        <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative mb-6">
+            <strong class="font-bold">Hebat!</strong>
+            <span class="block sm:inline">AI Auto-Responder Anda telah berhasil menjalankan uji coba gratis.</span>
+        </div>
+        <h2 class="text-2xl font-semibold text-gray-800 mb-4 text-center">Lihat Hasilnya di Akun TikTok Anda!</h2>
+        <p class="text-gray-700 mb-6 text-center">
+            Bot telah mencoba membalas beberapa komentar terbaru di video TikTok Shop Anda. Silakan cek hasilnya langsung di aplikasi TikTok Anda.
+            Jika Anda puas dengan hasilnya, saatnya untuk mengaktifkan bot secara penuh!
+        </p>
+
+        <div class="bg-blue-50 p-6 rounded-lg shadow-inner text-center mb-6">
+            <p class="text-xl font-bold text-blue-800 mb-3">Aktifkan AI Tanpa Batas!</p>
+            <p class="text-gray-700 mb-4">Dapatkan balasan otomatis untuk semua komentar di setiap video TikTok Shop Anda.</p>
+            <p class="text-3xl font-extrabold text-blue-600 mb-6">Hanya Rp 50.000 / bulan</p>
+            
+            <button id="subscribe-button" onclick="subscribeNow()" 
+                    class="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-lg text-lg transition duration-300 ease-in-out transform hover:-translate-y-1 focus:outline-none focus:ring-4 focus:ring-blue-300">
+                Berlangganan Sekarang!
+            </button>
+        </div>
+
+        <p class="text-sm text-gray-500 text-center mt-6">
+            Dengan berlangganan, bot akan berjalan secara otomatis sesuai jadwal yang Anda atur.
+        </p>
+
+    {% elif user.onboarding_stage == 'TRIAL_RUNNING' %}
+        {# Status: Bot sedang berjalan untuk uji coba #}
+        <div class="bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded relative mb-6 animate-pulse">
+            <strong class="font-bold">AI Sedang Bekerja!</strong>
+            <span class="block sm:inline">Bot komentar uji coba Anda sedang berjalan. Ini mungkin memakan waktu beberapa menit.</span>
+        </div>
+        <div class="flex flex-col items-center justify-center p-6 bg-white rounded-lg shadow-md mb-6">
+            <div class="animate-spin rounded-full h-20 w-20 border-t-4 border-b-4 border-blue-500 mb-4"></div>
+            <p class="text-xl font-semibold text-gray-800">AI Auto-Responder sedang memproses...</p>
+            <p class="text-gray-600 mt-2">Mohon tunggu. Halaman ini akan diperbarui secara otomatis.</p>
+        </div>
+        <p class="text-sm text-gray-500 text-center mt-6">
+            Jangan menutup halaman ini atau mematikan komputer Anda hingga proses selesai.
+        </p>
+        {# Skrip JavaScript untuk polling status akan ada di bawah #}
+
+    {% elif not user.has_used_free_trial %}
+        {# Status: Belum menggunakan uji coba gratis, tampilkan tombol #}
+        <div class="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded relative mb-6">
+            <strong class="font-bold">Hampir Selesai!</strong>
+            <span class="block sm:inline">Anda siap menjalankan uji coba gratis AI Auto-Responder Anda.</span>
+        </div>
+        <h2 class="text-2xl font-semibold text-gray-800 mb-4 text-center">Coba Gratis Bot Komentar Anda!</h2>
+        <p class="text-gray-700 mb-6 text-center">
+            Dapatkan pengalaman langsung bagaimana Sitono AI bekerja. Sitono AI akan membalas beberapa komentar terbaru di video TikTok Shop Anda secara otomatis.
+            Uji coba ini hanya bisa dilakukan sekali.
+        </p>
+
+        <div class="flex flex-col items-center justify-center p-6 bg-white rounded-lg shadow-md mb-6">
+            <p class="text-gray-800 text-lg mb-4">Siap untuk mencoba?</p>
+            <button id="run-trial-button" onclick="runFreeTrialBot()" 
+                    class="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-8 rounded-lg text-lg transition duration-300 ease-in-out transform hover:-translate-y-1 focus:outline-none focus:ring-4 focus:ring-green-300">
+                Jalankan Uji Coba Gratis Sekarang (1x)
+            </button>
+        </div>
+
+    {% else %}
+        {# Status: Sudah menggunakan uji coba, tapi belum berlangganan #}
+        <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-6">
+            <strong class="font-bold">Uji Coba Selesai!</strong>
+            <span class="block sm:inline">Anda sudah menggunakan uji coba gratis AI Auto-Responder. Untuk melanjutkan penggunaan, silakan berlangganan.</span>
+        </div>
+        <h2 class="text-2xl font-semibold text-gray-800 mb-4 text-center">Aktifkan AI Anda!</h2>
+        <p class="text-gray-700 mb-6 text-center">
+            Anda telah menikmati manfaat uji coba gratis. Jangan lewatkan kesempatan untuk mengotomatiskan balasan komentar Anda secara penuh!
+        </p>
+        <div class="bg-blue-50 p-6 rounded-lg shadow-inner text-center mb-6">
+            <p class="text-xl font-bold text-blue-800 mb-3">Aktifkan AI Tanpa Batas!</p>
+            <p class="text-gray-700 mb-4">Dapatkan balasan otomatis untuk semua komentar di setiap video TikTok Shop Anda.</p>
+            <p class="text-3xl font-extrabold text-blue-600 mb-6">Hanya Rp 50.000 / bulan</p>
+            
+            <button id="subscribe-button-alt" onclick="subscribeNow()" 
+                    class="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-lg text-lg transition duration-300 ease-in-out transform hover:-translate-y-1 focus:outline-none focus:ring-4 focus:ring-blue-300">
+                Berlangganan Sekarang!
+            </button>
+        </div>
+    {% endif %}
+
+</div>
+
+<script>
+    const POLLING_INTERVAL_MS = 3000; // Poll setiap 3 detik
+    let pollingIntervalId = null;
+
+    function startPollingStatus() {
+        if (pollingIntervalId) {
+            clearInterval(pollingIntervalId);
+        }
+        pollingIntervalId = setInterval(fetchUserOnboardingStatus, POLLING_INTERVAL_MS);
+        console.log("Polling status onboarding dimulai.");
+    }
+
+    function stopPollingStatus() {
+        if (pollingIntervalId) {
+            clearInterval(pollingIntervalId);
+            pollingIntervalId = null;
+            console.log("Polling status onboarding dihentikan.");
+        }
+    }
+
+    async function fetchUserOnboardingStatus() {
+        try {
+            const response = await fetch("{{ url_for('api_get_user_settings_for_ui') }}", {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            });
+            const data = await response.json();
+
+            console.log("Onboarding Status Polling:", data.onboarding_stage);
+
+            if (data.is_subscribed) {
+                stopPollingStatus();
+                alert("Selamat! Anda telah berlangganan. Mengarahkan ke Dashboard.");
+                window.location.href = "{{ url_for('dashboard') }}";
+            } else if (data.onboarding_stage === 'TRIAL_COMPLETED') {
+                stopPollingStatus();
+                alert("Uji coba gratis Anda telah selesai! Silakan periksa hasilnya dan pertimbangkan untuk berlangganan.");
+                window.location.reload(); // Reload untuk menampilkan UI "Uji coba selesai, CTA berlangganan"
+            } else if (data.onboarding_stage === 'TRIAL_RUNNING') {
+                // Tetap di halaman ini, UI akan otomatis menampilkan loading
+                console.log("AI Auto-Responder sedang berjalan...");
+            } else if (data.onboarding_stage === 'TIKTOK_CONNECT_PENDING' || data.onboarding_stage === 'AI_SETTINGS_PENDING' || data.onboarding_stage === 'REGISTERED') {
+                stopPollingStatus(); // Ada kemungkinan user me-refresh di tengah onboarding, arahkan ke tahap yang benar
+                alert("Onboarding Anda belum selesai. Mengarahkan ke tahap yang benar.");
+                // Middleware akan mengarahkan ke halaman yang benar setelah reload
+                window.location.reload(); 
+            }
+            // Jika onboarding_stage adalah 'TRIAL_CTA' (menunggu klik tombol), biarkan UI tetap tampilkan tombol
+            
+        } catch (error) {
+            console.error("Error saat polling status onboarding:", error);
+        }
+    }
+
+    async function runFreeTrialBot() {
+        if (!confirm('Anda yakin ingin menjalankan uji coba gratis bot komentar? Ini hanya bisa dilakukan sekali.')) {
+            return;
+        }
+
+        // Tampilkan loading state di UI secara langsung
+        document.getElementById('run-trial-button').disabled = true;
+        document.getElementById('run-trial-button').innerText = 'Memulai AI...';
+        // Reload halaman untuk memicu Flask app merender ulang dengan status TRIAL_RUNNING
+        // Atau kita bisa lebih canggih dengan AJAX untuk update elemen DOM
+        // Untuk kesederhanaan, mari kita gunakan AJAX dan update UI secara langsung
+        // Jika berhasil, polling akan menangkap perubahan stage
+        
+        try {
+            const response = await fetch("{{ url_for('api_onboarding_trigger_trial_bot') }}", {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            });
+            const data = await response.json();
+
+            if (response.ok) {
+                alert(data.message);
+                // Setelah berhasil memicu, start polling untuk update status
+                startPollingStatus();
+                // Atau lebih sederhana, reload halaman agar middleware Flask yang mengatur tampilan
+                window.location.reload(); 
+            } else {
+                alert('Gagal menjalankan uji coba bot: ' + data.message);
+                document.getElementById('run-trial-button').disabled = false;
+                document.getElementById('run-trial-button').innerText = 'Jalankan Uji Coba Gratis Sekarang (1x)';
+            }
+        } catch (error) {
+            alert('Terjadi kesalahan jaringan: ' + error);
+            document.getElementById('run-trial-button').disabled = false;
+            document.getElementById('run-trial-button').innerText = 'Jalankan Uji Coba Gratis Sekarang (1x)';
+        }
+    }
+
+    async function subscribeNow() {
+        // Ini adalah placeholder untuk proses pembayaran yang sebenarnya (Midtrans, dll.)
+        // Untuk sekarang, kita akan mensimulasikan langganan berhasil.
+        if (!confirm('Ini adalah simulasi berlangganan. Lanjutkan untuk menandai akun Anda sebagai pelanggan?')) {
+            return;
+        }
+
+        try {
+            const response = await fetch("{{ url_for('api_onboarding_subscribe') }}", {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            });
+            const data = await response.json();
+
+            if (response.ok) {
+                alert(data.message + ' Mengarahkan ke Dashboard.');
+                window.location.href = "{{ url_for('dashboard') }}";
+            } else {
+                alert('Gagal berlangganan: ' + data.message);
+            }
+        } catch (error) {
+            alert('Terjadi kesalahan jaringan saat berlangganan: ' + error);
+        }
+    }
+
+    // Inisialisasi pada saat halaman dimuat
+    window.onload = () => {
+        // Jika sedang dalam tahap TRIAL_RUNNING, mulai polling
+        if ("{{ user.onboarding_stage }}" === 'TRIAL_RUNNING') {
+            startPollingStatus();
+        }
+        // Jika sudah TRIAL_COMPLETED, tidak perlu polling, UI sudah statis
+        // Jika TRIAL_CTA (menunggu klik), tidak perlu polling, UI sudah statis
+    };
+</script>
+{% endblock %}

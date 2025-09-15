@@ -2,6 +2,7 @@ from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.dialects.sqlite import JSON # Tidak perlu lagi kalau processed_video_urls_json dihapus
 from datetime import datetime
 from flask_login import UserMixin # BARU: Import UserMixin
+from werkzeug.security import generate_password_hash, check_password_hash 
 
 db = SQLAlchemy()
 
@@ -18,16 +19,32 @@ class User(db.Model, UserMixin): # Tambahkan UserMixin di sini
     # Kolom yang digabungkan dari CreatorSettings
     tiktok_username = db.Column(db.String(120), unique=True, nullable=True) # Unique, tapi bisa Nullable untuk registrasi awal
     creator_character_description = db.Column(db.Text, nullable=True)
+    
     is_active = db.Column(db.Boolean, default=True)
-    daily_run_count = db.Column(db.Integer, default=0)
-    last_run_at = db.Column(db.DateTime, nullable=True)
+    daily_run_count = db.Column(db.Integer, default=1)
+    
+    last_comment_run_at = db.Column(db.DateTime, nullable=True)
+    comment_runs_today = db.Column(db.Integer, default=0, nullable=False)
+    
+    last_comment_run_at = db.Column(db.DateTime, nullable=True)
     cookies_json = db.Column(db.Text, nullable=True) # Akan menyimpan cookies TikTok
     qr_process_active = db.Column(db.Boolean, default=False, nullable=False)
     qr_generated_at = db.Column(db.DateTime, nullable=True)
+    
+    onboarding_stage = db.Column(db.String(50), default='REGISTERED', nullable=False)
+    has_used_free_trial = db.Column(db.Boolean, default=False, nullable=False)
+    is_subscribed = db.Column(db.Boolean, default=False, nullable=False)
 
     # Relasi ke model ProcessedVideo yang baru
     processed_videos = db.relationship('ProcessedVideo', backref='user', lazy=True)
 
+    def set_password(self, password):
+        self.password_hash = generate_password_hash(password)
+        
+    def check_password(self, password):
+        return check_password_hash(self.password_hash, password)
+    
+    
     def __repr__(self):
         return f'<User {self.username}>'
 

@@ -693,7 +693,7 @@ def run_tiktok_bot_task(user_id: int, api_client: APIClient):
                             #     'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36'
                             # )
                             options.add_argument('--disable-setuid-sandbox')
-                            options.add_argument('--lang=en-US,en;q=0.9')
+                            # options.add_argument('--lang=en-US,en;q=0.9')
 
                             try:
                                 driver = uc.Chrome(options=options)

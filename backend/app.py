@@ -11,7 +11,7 @@ import sys
 from rq import Queue
 import redis
 
-from backend.tasks import enqueue_qr_login_task # Import tugas RQ
+from backend.tasks import enqueue_qr_login_task,  enqueue_comment_processing_task # Import tugas RQ
 from backend.forms import RegistrationForm, LoginForm, AiSettingsForm
 from PIL import Image # Untuk memproses gambar QR
 import io # Untuk memproses gambar QR
@@ -23,8 +23,6 @@ if project_root not in sys.path:
     sys.path.append(project_root)
     
 from backend.models import db, User, ProcessedVideo, ProcessedComment
-from backend.forms import RegistrationForm, LoginForm, AiSettingsForm
-from backend.tasks import enqueue_qr_login_task
 
 # HAPUS: run_tiktok_bot_task dan generate_qr_and_wait_for_login tidak lagi dipanggil di Flask app
 # from akses_komen.bot import run_tiktok_bot_task 
@@ -86,13 +84,80 @@ def api_key_auth():
         'save_processed_comment_api', 
         'api_update_user_qr_status',
         'api_update_user_cookies_status',
-        'api_upload_qr_image'
+        'api_upload_qr_image',
+        'api_update_user_comment_run_status',
+        'api_onboarding_trial_bot_completed'
     ]
+    
+    if request.endpoint == 'serve_qr_code':
+        return
 
     if request.endpoint in api_key_endpoints:
         provided_api_key = request.headers.get('X-API-Key')
         if not provided_api_key or provided_api_key != API_BOT_KEY:
             return jsonify({"message": "Unauthorized: Invalid API Key."}), 401
+
+# ===============================================
+# Middleware Pengalihan Onboarding (BARU)
+# ===============================================
+@app.before_request
+def onboarding_redirect_middleware():
+    # Lewati jika tidak ada user yang login atau sedang mengakses endpoint yang diizinkan
+    if not current_user.is_authenticated:
+        # Izinkan akses ke welcome, register, login, static files
+        if request.endpoint in ['welcome', 'register', 'login', 'static', 'serve_qr_code']:
+            return None
+        return redirect(url_for('welcome')) # Arahkan ke welcome jika belum login
+    
+    # Lewati untuk endpoint API bot worker (sudah ditangani oleh api_key_auth)
+    # Dan endpoint API UI untuk ambil settings (akan dicek di rute masing-masing)
+    if request.endpoint and request.endpoint.startswith('api_'):
+        return None
+
+    # Lewati untuk endpoint logout dan payment (payment akan dihandle secara terpisah)
+    if request.endpoint in ['logout', 'payment']:
+        return None
+
+    user = current_user
+
+    # Jika sudah berlangganan atau admin, arahkan ke dashboard normal
+    if user.is_subscribed or user.is_admin:
+        if request.endpoint in ['dashboard', 'ai_settings', 'tiktok_connect', 'ai_activity', 'comment_details']: # Izinkan akses ke semua rute normal
+            return None # Sudah di dashboard
+        # Jika sedang mengakses halaman onboarding, arahkan ke dashboard
+        if request.endpoint in ['onboarding_ai_settings', 'onboarding_tiktok_connect', 'onboarding_trial_cta']:
+            return redirect(url_for('dashboard'))
+        return None # Biarkan mengakses halaman yang diminta (selain onboarding)
+
+    # =========================================================================
+    # Logika Pengalihan Onboarding untuk Pengguna yang Belum Berlangganan
+    # =========================================================================
+    
+    current_onboarding_route = request.endpoint
+
+    # Definisikan urutan alur onboarding
+    onboarding_flow = {
+        'REGISTERED': 'onboarding_ai_settings',
+        'AI_SETTINGS_PENDING': 'onboarding_ai_settings',
+        'TIKTOK_CONNECT_PENDING': 'onboarding_tiktok_connect',
+        'TRIAL_CTA': 'onboarding_trial_cta',
+        'TRIAL_RUNNING': 'onboarding_trial_cta',
+        'TRIAL_COMPLETED': 'onboarding_trial_cta',
+    }
+
+    expected_route_for_stage = onboarding_flow.get(user.onboarding_stage)
+
+    # Jika user mencoba mengakses rute yang bukan bagian dari flow onboarding
+    if current_onboarding_route not in onboarding_flow.values() and current_onboarding_route not in ['dashboard', 'welcome']:
+        flash('Harap lengkapi alur onboarding Anda.', 'info')
+        return redirect(url_for(expected_route_for_stage))
+
+    # Jika user tidak berada di halaman yang diharapkan sesuai tahap onboarding
+    if expected_route_for_stage and current_onboarding_route != expected_route_for_stage:
+        flash('Harap lengkapi alur onboarding Anda.', 'info')
+        return redirect(url_for(expected_route_for_stage))
+        
+    return None
 
 # ===============================================
 # ROUTE WEBSITE (UI)
@@ -110,11 +175,20 @@ def register():
     form = RegistrationForm()
     if form.validate_on_submit():
         hashed_password = generate_password_hash(form.password.data)
-        new_user = User(username=form.username.data, email=form.email.data, password_hash=hashed_password, is_admin=False) # Klien default bukan admin
+        new_user = User(username=form.username.data, 
+                        email=form.email.data, 
+                        password_hash=hashed_password, 
+                        is_admin=False,
+                        onboarding_stage='AI_SETTINGS_PENDING', # BARU: Set tahap onboarding awal
+                        is_active=False, # BARU: Bot tidak aktif sampai berlangganan/uji coba
+                        is_subscribed=False,
+                        has_used_free_trial=False) 
         db.session.add(new_user)
         db.session.commit()
         flash('Akun Anda berhasil didaftarkan! Silakan masuk.', 'success')
-        return redirect(url_for('dashboard'))
+        # Setelah registrasi, login user secara otomatis dan biarkan middleware mengarahkan
+        login_user(new_user)
+        return redirect(url_for('dashboard')) # Akan dialihkan oleh middleware
     return render_template('register.html', form=form)
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -144,12 +218,103 @@ def logout():
 @app.route('/dashboard')
 @login_required
 def dashboard():
-    total_videos = ProcessedVideo.query.filter_by(user_id=current_user.id).count()
-    total_comments = ProcessedComment.query.filter(ProcessedComment.video.has(user_id=current_user.id)).count()
-    return render_template('dashboard.html', total_videos=total_videos, total_comments=total_comments)
+    user = current_user # Pastikan mengambil user dari current_user
+    total_videos = ProcessedVideo.query.filter_by(user_id=user.id).count()
+    total_comments = ProcessedComment.query.filter(ProcessedComment.video.has(user_id=user.id)).count()
+    return render_template('dashboard.html', total_videos=total_videos, total_comments=total_comments, user=user) # Pass user object
+
+# ===============================================
+# ROUTE ONBOARDING (BARU)
+# ===============================================
+
+@app.route('/onboarding/ai_settings', methods=['GET', 'POST'])
+@login_required
+def onboarding_ai_settings(): # Rute khusus untuk onboarding AI Settings
+    form = AiSettingsForm()
+    user = User.query.get(current_user.id)
+
+    if not user:
+        flash("User tidak ditemukan.", "danger")
+        return redirect(url_for('welcome'))
+
+    if form.validate_on_submit():
+        user.tiktok_username = form.tiktok_username.data
+        user.creator_character_description = form.creator_character_description.data
+        
+        # Untuk onboarding, kita tidak mengubah is_active dan daily_run_count
+        # user.is_active = form.is_active.data 
+        # user.daily_run_count = form.daily_run_count.data
+        
+        try:
+            user.onboarding_stage = 'TIKTOK_CONNECT_PENDING' # Pindah ke tahap selanjutnya
+            db.session.add(user)
+            db.session.commit()
+            flash('Pengaturan AI awal berhasil disimpan! Sekarang hubungkan akun TikTok Anda.', 'success')
+            return redirect(url_for('onboarding_tiktok_connect'))
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Gagal menyimpan pengaturan AI: {e}', 'danger')
+
+    elif request.method == 'GET':
+        form.tiktok_username.data = user.tiktok_username
+        form.creator_character_description.data = user.creator_character_description
+        # Jangan isi is_active dan daily_run_count di mode onboarding
+        # form.is_active.data = user.is_active
+        # form.daily_run_count.data = str(user.daily_run_count)
+
+    return render_template('ai_settings.html', form=form, user_settings=user, onboarding_mode=True)
+
+@app.route('/onboarding/tiktok_connect')
+@login_required
+def onboarding_tiktok_connect(): # Rute khusus untuk onboarding TikTok Connect
+    user = User.query.get(current_user.id)
+    if not user:
+        flash("User tidak ditemukan.", "danger")
+        return redirect(url_for('welcome'))
+    
+    # Periksa apakah tiktok_username sudah diatur (harusnya sudah dari tahap sebelumnya)
+    if not user.tiktok_username:
+        flash('Silakan isi Nama Pengguna TikTok Anda terlebih dahulu.', 'warning')
+        return redirect(url_for('onboarding_ai_settings'))
+    
+    cookies_present = bool(user.cookies_json and json.loads(user.cookies_json))
+    
+    qr_process_active = user.qr_process_active
+    qr_generated_at = user.qr_generated_at
+    
+    qr_image_url = url_for('serve_qr_code', filename=f'qrcode_{user.id}.png')
+    
+    return render_template('tiktok_connect.html', 
+                            cookies_present=cookies_present, 
+                            tiktok_username=user.tiktok_username,
+                            qr_image_url=qr_image_url,
+                            qr_process_active=qr_process_active,
+                            qr_generated_at=qr_generated_at.isoformat() if qr_generated_at else None,
+                            onboarding_mode=True)
+
+@app.route('/onboarding/trial_cta', methods=['GET', 'POST']) # BARU: Halaman CTA Trial
+@login_required
+def onboarding_trial_cta():
+    user = current_user
+    if not user:
+        flash("User tidak ditemukan.", "danger")
+        return redirect(url_for('welcome'))
+    
+    # Logika untuk halaman trial CTA
+    # Ini akan diimplementasikan lebih detail di fase 7.5
+    return render_template('onboarding_trial_cta.html', 
+                           user=user, 
+                           onboarding_mode=True,
+                           has_used_free_trial=user.has_used_free_trial,
+                           is_subscribed=user.is_subscribed,
+                           onboarding_stage=user.onboarding_stage)
 
 
-@app.route('/tiktok_connect')
+# ===============================================
+# ROUTE WEBSITE (UI) - Rute Lama (Untuk Pengguna Berlangganan)
+# ===============================================
+
+@app.route('/tiktok_connect') # Menggunakan rute ini untuk pengguna berlangganan
 @login_required
 def tiktok_connect():
     user = User.query.get(current_user.id)
@@ -157,26 +322,20 @@ def tiktok_connect():
         flash("User tidak ditemukan.", "danger")
         return redirect(url_for('dashboard'))
     
-        # BARU: Periksa apakah tiktok_username sudah diatur
-    if not user.tiktok_username:
-        flash('Silakan isi Username TikTok Anda di Pengaturan AI sebelum menghubungkan akun.', 'warning')
-        return redirect(url_for('ai_settings')) # Arahkan ke halaman AI Settings
-    
+    # Pengalihan sudah ditangani oleh middleware. Rute ini hanya untuk subscribed/admin.
+
     cookies_present = bool(user.cookies_json and json.loads(user.cookies_json))
-    
     qr_process_active = user.qr_process_active
     qr_generated_at = user.qr_generated_at
-    
-    
-    # URL untuk gambar QR code (akan dilayani oleh serve_qr_code)
     qr_image_url = url_for('serve_qr_code', filename=f'qrcode_{user.id}.png')
     
     return render_template('tiktok_connect.html', 
                             cookies_present=cookies_present, 
                             tiktok_username=user.tiktok_username,
                             qr_image_url=qr_image_url,
-                            qr_process_active=qr_process_active, # BARU: Lewatkan ke template
-                            qr_generated_at=qr_generated_at.isoformat() if qr_generated_at else None) # BARU: Lewatkan ke template
+                            qr_process_active=qr_process_active,
+                            qr_generated_at=qr_generated_at.isoformat() if qr_generated_at else None,
+                            onboarding_mode=False) # Mode normal
 
 
 @app.route('/ai_settings', methods=['GET', 'POST'])
@@ -190,21 +349,19 @@ def ai_settings():
         return redirect(url_for('dashboard'))
 
     if form.validate_on_submit():
-        # Proses form submission
         user.tiktok_username = form.tiktok_username.data
         user.creator_character_description = form.creator_character_description.data
         user.is_active = form.is_active.data
         
         try:
-            # Validasi daily_run_count
             daily_run_count_int = int(form.daily_run_count.data)
             if daily_run_count_int < 0:
                 flash('Jumlah Jalan Per Hari tidak boleh negatif.', 'danger')
-                return render_template('ai_settings.html', form=form, user_settings=user)
+                return render_template('ai_settings.html', form=form, user_settings=user, onboarding_mode=False)
             user.daily_run_count = daily_run_count_int
         except ValueError:
             flash('Jumlah Jalan Per Hari harus berupa angka.', 'danger')
-            return render_template('ai_settings.html', form=form, user_settings=user)
+            return render_template('ai_settings.html', form=form, user_settings=user, onboarding_mode=False)
         
         try:
             db.session.add(user)
@@ -216,13 +373,41 @@ def ai_settings():
             flash(f'Gagal memperbarui pengaturan AI: {e}', 'danger')
 
     elif request.method == 'GET':
-        # Isi form dengan data user yang sudah ada
         form.tiktok_username.data = user.tiktok_username
         form.creator_character_description.data = user.creator_character_description
         form.is_active.data = user.is_active
-        form.daily_run_count.data = str(user.daily_run_count) # Konversi ke string untuk form
+        form.daily_run_count.data = str(user.daily_run_count)
 
-    return render_template('ai_settings.html', form=form, user_settings=user)
+    return render_template('ai_settings.html', form=form, user_settings=user, onboarding_mode=False)
+
+
+
+@app.route('/tiktok_connect_legacy') # Rute lama untuk non-onboarding user
+@login_required
+def tiktok_connect_legacy(): # Rute ini bisa dihapus atau digunakan untuk mode normal jika perlu
+    user = User.query.get(current_user.id)
+    if not user:
+        flash("User tidak ditemukan.", "danger")
+        return redirect(url_for('dashboard'))
+    
+    # Hanya izinkan akses jika user sudah subscribed atau admin
+    if not (user.is_subscribed or user.is_admin):
+        flash("Akses ditolak. Silakan lengkapi alur onboarding atau berlangganan.", "danger")
+        return redirect(url_for('dashboard'))
+
+    # ... (logika sama seperti tiktok_connect sebelumnya, tapi tanpa cek tiktok_username awal) ...
+    cookies_present = bool(user.cookies_json and json.loads(user.cookies_json))
+    qr_process_active = user.qr_process_active
+    qr_generated_at = user.qr_generated_at
+    qr_image_url = url_for('serve_qr_code', filename=f'qrcode_{user.id}.png')
+    
+    return render_template('tiktok_connect.html', 
+                            cookies_present=cookies_present, 
+                            tiktok_username=user.tiktok_username,
+                            qr_image_url=qr_image_url,
+                            qr_process_active=qr_process_active,
+                            qr_generated_at=qr_generated_at.isoformat() if qr_generated_at else None,
+                            onboarding_mode=False) # Mode normal
 
 @app.route('/ai_activity')
 @login_required
@@ -308,16 +493,12 @@ def comment_details(video_id):
 @app.route('/payment')
 @login_required
 def payment():
-    # Di masa depan, logika ini akan memeriksa status langganan user
-    # Untuk sekarang, ini adalah placeholder sederhana
-    is_subscribed = False # Contoh: diasumsikan belum berlangganan
-    subscription_end_date = None # Contoh: tanggal berakhir langganan
+    user = current_user # Mengambil user dari current_user
+    is_subscribed = user.is_subscribed # Mengambil status langganan dari user
+    subscription_end_date = None # Akan diisi dari model User jika ada
     
     # Contoh riwayat transaksi (dummy data)
-    transaction_history = [
-        {"id": 1, "date": "2025-08-01", "amount": "Rp 50.000", "status": "Sukses"},
-        {"id": 2, "date": "2025-07-01", "amount": "Rp 50.000", "status": "Sukses"}
-    ]
+    transaction_history = []
 
     return render_template('payment.html', 
                             is_subscribed=is_subscribed, 
@@ -341,7 +522,6 @@ def api_disconnect_tiktok():
         db.session.rollback()
         return jsonify({"message": f"Gagal memutuskan koneksi TikTok: {e}"}), 500
 
-# BARU: API Endpoint untuk memicu bot lokal agar memulai proses QR login baru
 @app.route('/api/trigger_qr_login', methods=['POST'])
 @login_required
 def api_trigger_qr_login():
@@ -349,19 +529,21 @@ def api_trigger_qr_login():
     if not user:
         return jsonify({"message": "User tidak ditemukan."}), 404
     
+    # HANYA izinkan trigger QR jika user dalam tahap onboarding TIKTOK_CONNECT_PENDING
+    # atau sudah subscribed (untuk re-connect)
+    if not (user.onboarding_stage == 'TIKTOK_CONNECT_PENDING' or user.is_subscribed or user.is_admin):
+        return jsonify({"message": "Akses ditolak. Tahap onboarding tidak sesuai atau belum berlangganan."}), 403
+
     try:
-        # BARU: Atur status QR process menjadi aktif di database
         user.qr_process_active = True
         user.qr_generated_at = None
-        user.cookies_json = json.dumps([]) # Pastikan cookies dikosongkan untuk pemicuan login baru
+        user.cookies_json = json.dumps([])
 
         db.session.add(user)
         db.session.commit()
 
-        # Enqueue tugas QR login ke RQ
-        enqueue_qr_login_task(user.id) # Panggil fungsi dari tasks.py
+        enqueue_qr_login_task(user.id)
 
-        # Juga hapus QR code image yang ada di VPS agar UI tidak menampilkan yang lama
         qr_image_path = os.path.join(QR_CODE_TEMP_DIR_SERVER, f'qrcode_{user.id}.png')
         if os.path.exists(qr_image_path):
             os.remove(qr_image_path)
@@ -384,9 +566,12 @@ def api_get_user_settings_for_ui():
         "user_id": user.id,
         "username": user.username,
         "tiktok_username": user.tiktok_username,
-        "cookies_json": user.cookies_json, # Kirim cookies_json untuk cek status di frontend
-        "qr_process_active": user.qr_process_active, # Kirim status QR
-        "qr_generated_at": user.qr_generated_at.isoformat() if user.qr_generated_at else None # Kirim timestamp QR
+        "cookies_json": user.cookies_json,
+        "qr_process_active": user.qr_process_active,
+        "qr_generated_at": user.qr_generated_at.isoformat() if user.qr_generated_at else None,
+        "onboarding_stage": user.onboarding_stage, # BARU: Kirim tahap onboarding
+        "has_used_free_trial": user.has_used_free_trial, # BARU: Kirim status free trial
+        "is_subscribed": user.is_subscribed # BARU: Kirim status langganan
     }), 200
     
 # BARU: Endpoint API untuk bot worker memperbarui status QR process
@@ -436,6 +621,13 @@ def api_update_user_cookies_status(user_id):
         user.cookies_json = cookies_json
         user.qr_process_active = False # Pastikan status QR dinonaktifkan
         user.qr_generated_at = None # Reset timestamp
+        
+        # BARU: Jika login TikTok berhasil dan user dalam tahap TIKTOK_CONNECT_PENDING, pindahkan ke TRIAL_CTA
+        if user.onboarding_stage == 'TIKTOK_CONNECT_PENDING':
+            user.onboarding_stage = 'TRIAL_CTA'
+            flash('Koneksi TikTok berhasil! Sekarang jalankan uji coba bot komentar Anda.', 'success')
+        
+        
         db.session.commit()
 
         # Hapus file QR code di server jika ada
@@ -451,6 +643,117 @@ def api_update_user_cookies_status(user_id):
         print(f"[{datetime.now()}] API ERROR: Gagal memperbarui cookies dan status QR untuk user {user_id}: {e}")
         return jsonify({"message": f"Error memperbarui cookies dan status QR: {e}"}), 500
 
+@app.route('/api/users/<int:user_id>/update_comment_run_status', methods=['PUT'])
+def api_update_user_comment_run_status(user_id):
+    data = request.get_json()
+    if not data:
+        return jsonify({"message": "Data diperlukan."}), 400
+
+    last_comment_run_at_str = data.get('last_comment_run_at')
+    comment_runs_today = data.get('comment_runs_today')
+    onboarding_stage = data.get('onboarding_stage')
+
+    if comment_runs_today is None:
+        return jsonify({"message": "comment_runs_today diperlukan."}), 400
+
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({"message": "User tidak ditemukan."}), 404
+
+    try:
+        if last_comment_run_at_str:
+            user.last_comment_run_at = datetime.fromisoformat(last_comment_run_at_str)
+        else:
+            user.last_comment_run_at = None
+        user.comment_runs_today = comment_runs_today
+        
+        if onboarding_stage:
+            user.onboarding_stage = onboarding_stage
+
+        db.session.commit()
+        return jsonify({"message": "Status run komentar user berhasil diperbarui."}), 200
+    except Exception as e:
+        db.session.rollback()
+        print(f"ERROR: Gagal memperbarui status run komentar user {user_id}: {e}")
+        return jsonify({"message": f"Gagal memperbarui status run komentar: {e}"}), 500
+
+@app.route('/api/onboarding/trial_bot_completed/<int:user_id>', methods=['PUT'])
+def api_onboarding_trial_bot_completed(user_id):
+    user = User.query.get(user_id)
+    if not user:
+        return jsonify({"message": "User not found."}), 404
+    
+    try:
+        if user.onboarding_stage == 'TRIAL_RUNNING':
+            user.onboarding_stage = 'TRIAL_COMPLETED'
+            db.session.commit()
+            print(f"[{datetime.now()}] API: Onboarding stage untuk user {user_id} diatur ke TRIAL_COMPLETED.")
+            return jsonify({"message": "Onboarding stage updated to TRIAL_COMPLETED."}), 200
+        else:
+            return jsonify({"message": "User not in TRIAL_RUNNING stage."}), 400
+    except Exception as e:
+        db.session.rollback()
+        print(f"[{datetime.now()}] API ERROR: Gagal memperbarui onboarding stage ke TRIAL_COMPLETED untuk user {user_id}: {e}")
+        return jsonify({"message": f"Error updating onboarding stage: {e}"}), 500
+
+@app.route('/api/onboarding/trigger_trial_bot', methods=['POST'])
+@login_required
+def api_onboarding_trigger_trial_bot():
+    user = current_user
+    if not user:
+        return jsonify({"message": "User tidak ditemukan."}), 404
+
+    # Periksa kondisi untuk menjalankan uji coba
+    if user.has_used_free_trial:
+        return jsonify({"message": "Anda sudah menggunakan uji coba gratis."}), 403
+    if not user.tiktok_username:
+        return jsonify({"message": "Nama pengguna TikTok belum diatur."}), 400
+    if not user.cookies_json or not json.loads(user.cookies_json):
+        return jsonify({"message": "Akun TikTok belum terhubung."}), 400
+    if user.onboarding_stage not in ['TRIAL_CTA', 'TRIAL_COMPLETED']: # Boleh trigger dari TRIAL_COMPLETED jika user belum subscribe dan ingin re-run
+        return jsonify({"message": "Tahap onboarding tidak sesuai untuk menjalankan uji coba."}), 403
+
+    try:
+        user.has_used_free_trial = True # Tandai sudah menggunakan uji coba
+        user.onboarding_stage = 'TRIAL_RUNNING' # Ubah status ke bot sedang berjalan
+        db.session.commit()
+
+        # Antrekan tugas bot komentar
+        # Untuk uji coba, kita bisa menggunakan daily_run_count=1 atau nilai default
+        enqueue_comment_processing_task(user.id)
+
+        return jsonify({"message": "Uji coba bot komentar berhasil dimulai!"}), 200
+    except Exception as e:
+        db.session.rollback()
+        print(f"[{datetime.now()}] API ERROR: Gagal memicu uji coba bot untuk user {user.id}: {e}")
+        return jsonify({"message": f"Gagal memicu uji coba bot: {e}"}), 500
+
+# BARU: API Endpoint untuk simulasi langganan
+@app.route('/api/onboarding/subscribe', methods=['POST'])
+@login_required
+def api_onboarding_subscribe():
+    user = current_user
+    if not user:
+        return jsonify({"message": "User tidak ditemukan."}), 404
+
+    if user.is_subscribed:
+        return jsonify({"message": "Anda sudah berlangganan."}), 400
+
+    try:
+        user.is_subscribed = True
+        user.onboarding_stage = 'SUBSCRIBED' # Pindah ke tahap subscribed
+        user.is_active = True # Aktifkan bot setelah berlangganan
+        # Set daily_run_count ke default jika belum diset atau sesuaikan
+        if user.daily_run_count < 1: 
+            user.daily_run_count = 1 
+
+        db.session.commit()
+        flash('Selamat! Anda berhasil berlangganan. Selamat datang di Dashboard!', 'success')
+        return jsonify({"message": "Berlangganan berhasil."}), 200
+    except Exception as e:
+        db.session.rollback()
+        print(f"[{datetime.now()}] API ERROR: Gagal memproses langganan untuk user {user.id}: {e}")
+        return jsonify({"message": f"Gagal berlangganan: {e}"}), 500
 
 # Endpoint untuk pengaturan creator (melalui UI, otentikasi Flask-Login)
 @app.route('/api/creator_settings/<int:user_id>', methods=['GET', 'POST'])
@@ -864,45 +1167,46 @@ def upload_qr_image_api(user_id):
 # BARU: Endpoint untuk bot worker mengambil daftar user aktif yang perlu diproses
 @app.route('/api/active_users_for_bot', methods=['GET'])
 def get_active_users_for_bot():
+    # ... (logika ini akan diubah saat kita mengimplementasikan scheduler)
     """
     Mengembalikan daftar user ID yang aktif dan perlu diproses oleh bot worker.
     Membutuhkan API Key.
     """
     try:
         current_time = datetime.now()
-        # Ambil semua user yang aktif
-        active_users = User.query.filter_by(is_active=True).all()
+        
+        # Ambil semua user yang aktif DAN memiliki cookies DAN tiktok_username
+        # Serta bukan dalam tahap onboarding QR atau Trial Running
+        active_users = User.query.filter(
+            User.is_active == True,
+            User.cookies_json.isnot(None),
+            User.tiktok_username.isnot(None),
+            User.onboarding_stage.notin(['TIKTOK_CONNECT_PENDING', 'TRIAL_RUNNING']) # Tidak proses user yang lagi QR/Trial
+        ).all()
         
         users_to_process = []
         for user in active_users:
-            # Perhitungan sederhana untuk menentukan apakah user perlu diproses:
-            # 1. Jika belum pernah jalan (last_run_at is None)
-            # 2. Jika daily_run_count > 0 DAN sudah melewati interval yang ditentukan
-            
+            # ... existing logic ... (Ini akan direvisi saat implementasi scheduler)
             should_process = False
             
-            if not user.last_run_at:
+            # Logika penjadwalan sederhana (akan diganti oleh APScheduler nanti)
+            # Untuk sementara, jika belum pernah run, atau sudah lebih dari X jam
+            if not user.last_comment_run_at: # Menggunakan last_comment_run_at
                 should_process = True
             elif user.daily_run_count > 0:
-                # Hitung interval per jalankan
-                # Contoh: jika daily_run_count=3, berarti setiap 8 jam
                 interval_hours = 24 / user.daily_run_count
-                next_run_time = user.last_run_at + timedelta(hours=interval_hours)
+                next_run_time = user.last_comment_run_at + timedelta(hours=interval_hours)
                 
                 if current_time >= next_run_time:
                     should_process = True
             
             if should_process:
-                # Hanya tambahkan jika tiktok_username ada, karena bot tidak bisa jalan tanpa ini
-                if user.tiktok_username:
-                    users_to_process.append({
-                        "user_id": user.id,
-                        "tiktok_username": user.tiktok_username,
-                        "last_run_at": user.last_run_at.isoformat() if user.last_run_at else None,
-                        "next_run_estimate": (user.last_run_at + timedelta(hours=24 / user.daily_run_count)).isoformat() if user.last_run_at and user.daily_run_count > 0 else "N/A"
-                    })
-                else:
-                    print(f"Peringatan: User {user.id} aktif tetapi tidak memiliki tiktok_username. Melewati.")
+                users_to_process.append({
+                    "user_id": user.id,
+                    "tiktok_username": user.tiktok_username,
+                    "last_comment_run_at": user.last_comment_run_at.isoformat() if user.last_comment_run_at else None,
+                    "next_run_estimate": (user.last_comment_run_at + timedelta(hours=24 / user.daily_run_count)).isoformat() if user.last_comment_run_at and user.daily_run_count > 0 else "N/A"
+                })
 
         return jsonify({"users": users_to_process}), 200
     except Exception as e:

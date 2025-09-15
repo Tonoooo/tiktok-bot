@@ -4,7 +4,11 @@
 
 {% block content %}
 <div class="container mx-auto p-4">
+    {% if onboarding_mode %} {# BARU: Judul Halaman Onboarding #}
+    <h1 class="text-3xl font-bold text-gray-900 mb-6">Langkah 2: Hubungkan Akun TikTok Anda</h1>
+    {% else %} {# Judul Halaman Normal #}
     <h1 class="text-3xl font-bold text-gray-900 mb-6">Hubungkan Akun TikTok Anda</h1>
+    {% endif %}
 
     {% if cookies_present %}
         <!-- Tampilan jika cookies ada (sudah terhubung) -->
@@ -24,8 +28,14 @@
             <span class="block sm:inline">Anda belum menghubungkan akun TikTok Anda. AI tidak dapat memproses komentar tanpa koneksi ini.</span>
         </div>
         
-        <p class="text-gray-700 mb-6">Untuk mengaktifkan AI, silakan hubungkan akun TikTok Anda dengan memindai QR Code di bawah ini menggunakan aplikasi TikTok.</p>
-        
+        <p class="text-gray-700 mb-6">
+            {% if onboarding_mode %} {# BARU: Pesan deskriptif onboarding #}
+            Untuk mengaktifkan AI dan memulai uji coba Anda, silakan hubungkan akun TikTok Anda dengan memindai QR Code di bawah ini menggunakan aplikasi TikTok.
+            {% else %} {# Pesan deskriptif normal #}
+            Untuk mengaktifkan AI, silakan hubungkan akun TikTok Anda dengan memindai QR Code di bawah ini menggunakan aplikasi TikTok.
+            {% endif %}
+        </p>  
+
         <!-- Kontainer utama untuk tombol pemicu QR atau tampilan QR -->
         <div id="qr-trigger-area" class="flex flex-col items-center justify-center p-6 bg-white rounded-lg shadow-md mb-6 
             {% if qr_process_active %}hidden{% endif %}"> {# Sembunyikan jika proses QR aktif #}
@@ -223,6 +233,14 @@
                 console.error('Error saat polling status login:', error);
             }
         }, 5000);
+
+        if (response.ok && data.cookies_json && JSON.parse(data.cookies_json).length > 0 && data.qr_process_active === false) {
+            clearInterval(qrPollingImageInterval);
+            clearInterval(qrPollingLoginInterval);
+            alert('Login TikTok berhasil! Halaman akan disegarkan.');
+            window.location.reload(); // Ini akan memicu middleware untuk mengarahkan ke tahap berikutnya (TRIAL_CTA)
+        } 
+
     }
 
     async function downloadQrCode() {

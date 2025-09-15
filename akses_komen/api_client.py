@@ -2,42 +2,69 @@ import requests
 import json
 import os
 from typing import Optional, Dict, Any
+from datetime import datetime
+
 class APIClient:
     def __init__(self, base_url: str, api_key: str):
         self.base_url = base_url
         self.api_key = api_key
+        self.headers = {
+            'X-API-KEY': self.api_key,
+            'Content-Type': 'application/json'
+        }
         print(f"APIClient diinisialisasi dengan base_url: {self.base_url}")
-    def _make_request(self, method: str, endpoint: str, params: Optional[Dict] = None, json_data: Optional[Dict] = None, files: Optional[Dict] = None) -> Dict:
+        
+    def _make_request(self, method, endpoint, data=None, params: Optional[Dict] = None, json_data: Optional[Dict] = None, files: Optional[Dict] = None) -> Dict:
         url = f"{self.base_url}{endpoint}"
         headers = {"X-API-Key": self.api_key}
         
         try:
-            if method == "GET":
-                response = requests.get(url, headers=headers, params=params, timeout=30)
-            elif method == "POST":
-                if files: # Jika ada file untuk diupload
-                    response = requests.post(url, headers=headers, params=params, files=files, timeout=30)
-                else: # Jika hanya data JSON
-                    response = requests.post(url, headers=headers, params=params, json=json_data, timeout=30) # PERBAIKAN: Gunakan json=json_data
-            # ... (metode PUT, DELETE jika ada)
+            if method == 'GET':
+                response = requests.get(url, headers=self.headers, timeout=30)
+            elif method == 'POST':
+                response = requests.post(url, headers=self.headers, json=data, timeout=30)
+            elif method == 'PUT':
+                response = requests.put(url, headers=self.headers, json=data, timeout=30)
             else:
-                raise ValueError(f"Metode HTTP tidak didukung: {method}")
+                raise ValueError("Metode HTTP tidak didukung.")
+            
             response.raise_for_status() # Raise HTTPError for bad responses (4xx or 5xx)
             return response.json()
         except requests.exceptions.Timeout:
-            print(f"ERROR: Permintaan API ke {url} timeout setelah 30 detik.")
-            raise
+            raise Exception(f"Permintaan ke {url} timeout setelah 30 detik.")
         except requests.exceptions.RequestException as e:
-            print(f"ERROR: Kesalahan API saat meminta {url}: {e}")
-            if hasattr(e, 'response') and e.response is not None:
-                print(f"Response content: {e.response.text}")
-            raise
-    def get_user_settings(self, user_id: int) -> Optional[Dict]:
+            error_message = f"ERROR APIClient: Gagal terhubung ke VPS API atau ada masalah respons: {e}"
+            if response is not None:
+                try:
+                    error_data = response.json()
+                    error_message += f" - Detail: {error_data.get('message', str(error_data))}"
+                except json.JSONDecodeError:
+                    error_message += f" - Teks Respons: {response.text}"
+            raise Exception(error_message)
+        
+        
+    def get_user_settings(self, user_id: int):
         endpoint = f"/api/users/{user_id}"
-        try:
-            return self._make_request("GET", endpoint)
-        except Exception:
-            return None
+        return self._make_request('GET', endpoint)
+    
+    def update_user_last_comment_run(self, user_id: int, last_run_at: datetime, comment_runs_today: int, onboarding_stage: str = None): # BARU: Tambah onboarding_stage
+        """
+        Memperbarui timestamp terakhir bot komentar dijalankan dan hitungan run harian untuk user.
+        Juga dapat memperbarui onboarding_stage jika disediakan.
+        """
+        endpoint = f"/api/users/{user_id}/update_comment_run_status"
+        data = {
+            "last_comment_run_at": last_run_at.isoformat() if last_run_at else None,
+            "comment_runs_today": comment_runs_today
+        }
+        if onboarding_stage: # BARU: Tambahkan ke payload jika ada
+            data['onboarding_stage'] = onboarding_stage
+        return self._make_request('PUT', endpoint, data)
+    
+    def update_onboarding_stage_after_trial(self, user_id: int):
+        endpoint = f"/api/onboarding/trial_bot_completed/{user_id}"
+        return self._make_request('PUT', endpoint)
+    
     def update_user_cookies(self, user_id: int, cookies_json: str):
         endpoint = f"/api/users/{user_id}/cookies"
         data = {"cookies_json": cookies_json}

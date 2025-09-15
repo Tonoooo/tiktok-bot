@@ -1,6 +1,6 @@
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField, BooleanField, SubmitField
-from wtforms.validators import DataRequired, Email, EqualTo, ValidationError
+from wtforms.validators import DataRequired, Email, EqualTo, ValidationError, NumberRange, IntegerField
 from backend.models import User # Menggunakan User dari models.py
 from flask_login import current_user 
 from backend.models import User
@@ -33,7 +33,9 @@ class AiSettingsForm(FlaskForm):
     tiktok_username = StringField('Nama Pengguna TikTok', description='Nama pengguna TikTok (tanpa "@") yang akan dipantau oleh AI. Harus unik untuk setiap klien.')
     creator_character_description = StringField('Deskripsi Karakter Kreator', description='Contoh: "pria, usia 20-an, tegas, suka humor". AI akan meniru karakter ini saat membalas.')
     is_active = BooleanField('Aktifkan AI Auto-Responder', description='Centang untuk mengaktifkan AI agar memproses komentar secara otomatis.')
-    daily_run_count = StringField('Jumlah Jalan Per Hari', description='Berapa kali AI akan memeriksa dan membalas komentar dalam sehari. Misal: "3" untuk 3 kali sehari.')
+    daily_run_count = IntegerField('Jumlah Jalan Per Hari', 
+                                   validators=[DataRequired(), NumberRange(min=1, max=3, message='Jumlah jalan per hari harus antara 1 dan 3.')], # BARU: Validasi NumberRange
+                                   description='Berapa kali AI akan memeriksa dan membalas komentar dalam sehari.')
     submit = SubmitField('Simpan Pengaturan AI')
 
     def validate_tiktok_username(self, tiktok_username):
