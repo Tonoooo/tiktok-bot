@@ -43,6 +43,8 @@ app.config['SESSION_COOKIE_SAMESITE'] = 'Lax' # Pengaturan SameSite yang umum da
 
 app.config['SERVER_NAME'] = 'sitono.online'
 
+app.config['SESSION_COOKIE_DOMAIN'] = '.sitono.online'
+
 db.init_app(app)
 
 app.jinja_env.globals['datetime'] = datetime

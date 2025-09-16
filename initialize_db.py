@@ -60,7 +60,7 @@ with app.app_context():
             username='cozy', 
             email='balanjan.id.pusat@gmail.com', 
             password_hash=hashed_password,
-            tiktok_username='cozy_kilo', # Digabung dari CreatorSettings
+            tiktok_username='cozy', # Digabung dari CreatorSettings
             creator_character_description='pria, usia 20-an, tegas, suka humor, sering menggunakan kata "mantap"', # Digabung
             is_active=True, # Digabung
             daily_run_count=0, # Digabung
