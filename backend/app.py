@@ -103,6 +103,7 @@ def api_key_auth():
 @app.before_request
 def onboarding_redirect_middleware():
     # Lewati jika tidak ada user yang login atau sedang mengakses endpoint yang diizinkan
+    print(f"[{datetime.now()}] DEBUG Middleware: Endpoint={request.endpoint}, Is Authenticated={current_user.is_authenticated}")
     if not current_user.is_authenticated:
         # Izinkan akses ke welcome, register, login, static files
         if request.endpoint in ['welcome', 'register', 'login', 'static', 'serve_qr_code']:
@@ -170,7 +171,7 @@ def welcome():
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if current_user.is_authenticated:
-        return redirect(url_for('dashboard')) # Jika sudah login, redirect ke dashboard
+        return redirect(url_for('dashboard'))
 
     form = RegistrationForm()
     if form.validate_on_submit():
@@ -179,16 +180,15 @@ def register():
                         email=form.email.data, 
                         password_hash=hashed_password, 
                         is_admin=False,
-                        onboarding_stage='AI_SETTINGS_PENDING', # BARU: Set tahap onboarding awal
-                        is_active=False, # BARU: Bot tidak aktif sampai berlangganan/uji coba
+                        onboarding_stage='AI_SETTINGS_PENDING',
+                        is_active=False, 
                         is_subscribed=False,
                         has_used_free_trial=False) 
         db.session.add(new_user)
         db.session.commit()
         flash('Akun Anda berhasil didaftarkan! Silakan masuk.', 'success')
-        # Setelah registrasi, login user secara otomatis dan biarkan middleware mengarahkan
         login_user(new_user)
-        return redirect(url_for('onboarding_ai_settings')) # Akan dialihkan oleh middleware
+        return redirect(url_for('onboarding_ai_settings')) 
     return render_template('register.html', form=form)
 
 @app.route('/login', methods=['GET', 'POST'])
