@@ -37,17 +37,11 @@ db_path = os.path.join(project_root, 'site.db')
 app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-app.config['SESSION_COOKIE_SECURE'] = False # JANGAN gunakan Secure cookie di HTTP
+app.config['SESSION_COOKIE_SECURE'] = True
 app.config['SESSION_COOKIE_HTTPONLY'] = True # Untuk keamanan, cookie hanya bisa diakses via HTTP
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax' # Pengaturan SameSite yang umum dan aman
 
-# BARU: Set SERVER_NAME dan SESSION_COOKIE_DOMAIN/PATH untuk mengatasi masalah sesi di IP publik
-# Gunakan IP publik Anda tanpa port untuk domain cookie
-app.config['SERVER_NAME'] = '103.52.114.253:5000' # Tetap pertahankan ini untuk url_for dll.
-app.config['SESSION_COOKIE_DOMAIN'] = '103.52.114.253' # Hanya bagian IP-nya saja
-app.config['SESSION_COOKIE_PATH'] = '/' # Pastikan cookie berlaku untuk seluruh path
-
-# CORS(app) 
+app.config['SERVER_NAME'] = 'sitono.online'
 
 db.init_app(app)
 
@@ -61,10 +55,7 @@ login_manager.login_message_category = "warning"
 
 @login_manager.user_loader
 def load_user(user_id):
-    print(f"[{datetime.now()}] DEBUG: load_user dipanggil dengan user_id: {user_id}")
     user = User.query.get(int(user_id))
-    print(f"[{datetime.now()}] DEBUG: load_user mengembalikan user: {user.id if user else 'None'}")
-    print(f"[{datetime.now()}] DEBUG: Current session in load_user: {session}")
     return user
 
 
@@ -118,13 +109,10 @@ def api_key_auth():
 # @app.before_request
 def onboarding_redirect_middleware():
     # Lewati jika tidak ada user yang login atau sedang mengakses endpoint yang diizinkan
-    print(f"[{datetime.now()}] DEBUG Middleware: Endpoint={request.endpoint}, Is Authenticated={current_user.is_authenticated}")
-    print(f"[{datetime.now()}] DEBUG Middleware: Current session in middleware: {session}") 
     if not current_user.is_authenticated:
         # Izinkan akses ke welcome, register, login, static files
         if request.endpoint in ['welcome', 'register', 'login', 'static', 'serve_qr_code']:
             return None
-        print(f"[{datetime.now()}] DEBUG Middleware: Redirecting unauthenticated user from {request.endpoint} to welcome.")
         return redirect(url_for('welcome')) # Arahkan ke welcome jika belum login
     
     # Lewati untuk endpoint API bot worker (sudah ditangani oleh api_key_auth)
@@ -205,8 +193,6 @@ def register():
         db.session.commit()
         flash('Akun Anda berhasil didaftarkan! Silakan masuk.', 'success')
         login_user(new_user)
-        print(f"[{datetime.now()}] DEBUG Register: login_user dipanggil untuk user {new_user.id}. Mengalihkan ke onboarding_ai_settings.")
-        print(f"[{datetime.now()}] DEBUG Register: Session after login_user: {session}")
         return redirect(url_for('onboarding_ai_settings')) 
     return render_template('register.html', form=form)
 
@@ -221,8 +207,6 @@ def login():
         if user and check_password_hash(user.password_hash, form.password.data):
             login_user(user, remember=form.remember_me.data)
             flash('Berhasil masuk!', 'success')
-            print(f"[{datetime.now()}] DEBUG Login: login_user dipanggil untuk user {user.id}. Mengalihkan.")
-            print(f"[{datetime.now()}] DEBUG Login: Session after login_user: {session}")
             next_page = request.args.get('next')
             if user.is_subscribed or user.is_admin:
                 return redirect(next_page or url_for('dashboard'))
