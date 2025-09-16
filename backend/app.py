@@ -41,6 +41,12 @@ app.config['SESSION_COOKIE_SECURE'] = False # JANGAN gunakan Secure cookie di HT
 app.config['SESSION_COOKIE_HTTPONLY'] = True # Untuk keamanan, cookie hanya bisa diakses via HTTP
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax' # Pengaturan SameSite yang umum dan aman
 
+# BARU: Set SERVER_NAME dan SESSION_COOKIE_DOMAIN/PATH untuk mengatasi masalah sesi di IP publik
+# Gunakan IP publik Anda tanpa port untuk domain cookie
+app.config['SERVER_NAME'] = '103.52.114.253:5000' # Tetap pertahankan ini untuk url_for dll.
+app.config['SESSION_COOKIE_DOMAIN'] = '103.52.114.253' # Hanya bagian IP-nya saja
+app.config['SESSION_COOKIE_PATH'] = '/' # Pastikan cookie berlaku untuk seluruh path
+
 # CORS(app) 
 
 db.init_app(app)
