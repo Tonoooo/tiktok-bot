@@ -1,6 +1,6 @@
 from flask_wtf import FlaskForm
-from wtforms import StringField, PasswordField, BooleanField, SubmitField
-from wtforms.validators import DataRequired, Email, EqualTo, ValidationError, NumberRange, IntegerField
+from wtforms import StringField, PasswordField, BooleanField, SubmitField, IntegerField
+from wtforms.validators import DataRequired, Email, EqualTo, ValidationError, NumberRange
 from backend.models import User # Menggunakan User dari models.py
 from flask_login import current_user 
 from backend.models import User
