@@ -109,7 +109,7 @@ def api_key_auth():
 # ===============================================
 # Middleware Pengalihan Onboarding (BARU)
 # ===============================================
-@app.before_request
+# @app.before_request
 def onboarding_redirect_middleware():
     # Lewati jika tidak ada user yang login atau sedang mengakses endpoint yang diizinkan
     print(f"[{datetime.now()}] DEBUG Middleware: Endpoint={request.endpoint}, Is Authenticated={current_user.is_authenticated}")
