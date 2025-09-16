@@ -37,6 +37,10 @@ db_path = os.path.join(project_root, 'site.db')
 app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
+app.config['SESSION_COOKIE_SECURE'] = False # JANGAN gunakan Secure cookie di HTTP
+app.config['SESSION_COOKIE_HTTPONLY'] = True # Untuk keamanan, cookie hanya bisa diakses via HTTP
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax' # Pengaturan SameSite yang umum dan aman
+
 # CORS(app) 
 
 db.init_app(app)
