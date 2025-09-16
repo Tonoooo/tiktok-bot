@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from flask import Flask, request, jsonify, render_template, redirect, url_for, flash, send_from_directory
 from flask_login import LoginManager, login_user, logout_user, current_user, login_required
 from werkzeug.security import generate_password_hash, check_password_hash
+from flask import session
 
 import sys
 from rq import Queue
@@ -53,6 +54,7 @@ def load_user(user_id):
     print(f"[{datetime.now()}] DEBUG: load_user dipanggil dengan user_id: {user_id}")
     user = User.query.get(int(user_id))
     print(f"[{datetime.now()}] DEBUG: load_user mengembalikan user: {user.id if user else 'None'}")
+    print(f"[{datetime.now()}] DEBUG: Current session in load_user: {session}")
     return user
 
 
@@ -107,6 +109,7 @@ def api_key_auth():
 def onboarding_redirect_middleware():
     # Lewati jika tidak ada user yang login atau sedang mengakses endpoint yang diizinkan
     print(f"[{datetime.now()}] DEBUG Middleware: Endpoint={request.endpoint}, Is Authenticated={current_user.is_authenticated}")
+    print(f"[{datetime.now()}] DEBUG Middleware: Current session in middleware: {session}") 
     if not current_user.is_authenticated:
         # Izinkan akses ke welcome, register, login, static files
         if request.endpoint in ['welcome', 'register', 'login', 'static', 'serve_qr_code']:
@@ -193,6 +196,7 @@ def register():
         flash('Akun Anda berhasil didaftarkan! Silakan masuk.', 'success')
         login_user(new_user)
         print(f"[{datetime.now()}] DEBUG Register: login_user dipanggil untuk user {new_user.id}. Mengalihkan ke onboarding_ai_settings.")
+        print(f"[{datetime.now()}] DEBUG Register: Session after login_user: {session}")
         return redirect(url_for('onboarding_ai_settings')) 
     return render_template('register.html', form=form)
 
@@ -208,6 +212,7 @@ def login():
             login_user(user, remember=form.remember_me.data)
             flash('Berhasil masuk!', 'success')
             print(f"[{datetime.now()}] DEBUG Login: login_user dipanggil untuk user {user.id}. Mengalihkan.")
+            print(f"[{datetime.now()}] DEBUG Login: Session after login_user: {session}")
             next_page = request.args.get('next')
             if user.is_subscribed or user.is_admin:
                 return redirect(next_page or url_for('dashboard'))
