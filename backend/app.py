@@ -188,7 +188,7 @@ def register():
         flash('Akun Anda berhasil didaftarkan! Silakan masuk.', 'success')
         # Setelah registrasi, login user secara otomatis dan biarkan middleware mengarahkan
         login_user(new_user)
-        return redirect(url_for('dashboard')) # Akan dialihkan oleh middleware
+        return redirect(url_for('onboarding_ai_settings')) # Akan dialihkan oleh middleware
     return render_template('register.html', form=form)
 
 @app.route('/login', methods=['GET', 'POST'])
@@ -203,7 +203,10 @@ def login():
             login_user(user, remember=form.remember_me.data)
             flash('Berhasil masuk!', 'success')
             next_page = request.args.get('next')
-            return redirect(next_page or url_for('dashboard'))
+            if user.is_subscribed or user.is_admin:
+                return redirect(next_page or url_for('dashboard'))
+            else:
+                return redirect(next_page or url_for('onboarding_ai_settings')) # Arahkan ke titik awal onboarding
         else:
             flash('Login gagal. Periksa email dan kata sandi Anda.', 'danger')
     return render_template('login.html', form=form)
