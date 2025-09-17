@@ -30,8 +30,11 @@ from backend.models import db, User, ProcessedVideo, ProcessedComment
 # from akses_komen.bot import run_tiktok_bot_task 
 # from akses_komen.qr_login_service import generate_qr_and_wait_for_login, QR_CODE_TEMP_DIR
 
-app = Flask(__name__)
-app.config['SECRET_KEY'] = 'kunci_rahasia_anda_yang_sangat_aman_dan_sulit_ditebak' 
+app = Flask(__name__, instance_relative_config=True)
+app.config.from_mapping(
+    SECRET_KEY='kunci_rahasia_anda_yang_sangat_aman_dan_sulit_ditebak', # GANTI DENGAN KUNCI YANG KUAT & UNIK UNTUK PRODUKSI
+    DATABASE=os.path.join(app.instance_path, 'site.db'),
+)
 
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
 db_path = os.path.join(project_root, 'site.db')
@@ -42,9 +45,9 @@ app.config['SESSION_COOKIE_SECURE'] = True
 app.config['SESSION_COOKIE_HTTPONLY'] = True # Untuk keamanan, cookie hanya bisa diakses via HTTP
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax' # Pengaturan SameSite yang umum dan aman
 
-# app.config['SERVER_NAME'] = 'sitono.online'
+app.config['SERVER_NAME'] = 'sitono.online'
 
-# app.config['SESSION_COOKIE_DOMAIN'] = '.sitono.online'
+app.config['SESSION_COOKIE_DOMAIN'] = '.sitono.online'
 
 app.config['PREFERRED_URL_SCHEME'] = 'https' 
 
@@ -64,10 +67,10 @@ login_manager.session_protection = None
 
 @login_manager.user_loader
 def load_user(user_id):
-    # print(f"[{datetime.now()}] DEBUG: load_user dipanggil dengan user_id: {user_id}")
+    print(f"[{datetime.now()}] DEBUG: load_user dipanggil dengan user_id: {user_id}")
     user = User.query.get(int(user_id))
-    # print(f"[{datetime.now()}] DEBUG: load_user mengembalikan user: {user.id if user else 'None'}")
-    # print(f"[{datetime.now()}] DEBUG: Current session in load_user: {session}") # BARU: Periksa sesi di user_loader
+    print(f"[{datetime.now()}] DEBUG: load_user mengembalikan user: {user.id if user else 'None'}")
+    print(f"[{datetime.now()}] DEBUG: Current session in load_user: {session}") # BARU: Periksa sesi di user_loader
     return user
 
 
@@ -132,8 +135,8 @@ def onboarding_redirect_middleware():
         print(f"[{datetime.now()}] DEBUG Middleware: User from DB (via session ID): {user_from_db.id if user_from_db else 'None'}")
     
     if not current_user.is_authenticated:
-        #print(f"[{datetime.now()}] DEBUG Middleware: Endpoint={request.endpoint}, Is Authenticated={current_user.is_authenticated}, User ID={current_user.id if current_user.is_authenticated else 'N/A'}") # TAMBAH USER ID
-        #print(f"[{datetime.now()}] DEBUG Middleware: Current session in middleware: {session}") # BARU: Periksa sesi di middleware
+        print(f"[{datetime.now()}] DEBUG Middleware: Endpoint={request.endpoint}, Is Authenticated={current_user.is_authenticated}, User ID={current_user.id if current_user.is_authenticated else 'N/A'}") # TAMBAH USER ID
+        print(f"[{datetime.now()}] DEBUG Middleware: Current session in middleware: {session}") # BARU: Periksa sesi di middleware
         # Izinkan akses ke welcome, register, login, static files
         if request.endpoint in ['welcome', 'register', 'login', 'static', 'serve_qr_code']:
             return None
