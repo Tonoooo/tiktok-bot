@@ -118,15 +118,34 @@ def api_key_auth():
 # ===============================================
 @app.before_request
 def onboarding_redirect_middleware():
+    print(f"[{datetime.now()}] DEBUG Middleware: Endpoint={request.endpoint}, Is Authenticated={current_user.is_authenticated}, Session User ID={session.get('_user_id')}, Current User ID={current_user.id if current_user.is_authenticated else 'N/A'}")
+    print(f"[{datetime.now()}] DEBUG Middleware: Current session in middleware: {session}")
     # Lewati jika tidak ada user yang login atau sedang mengakses endpoint yang diizinkan
+    
+    user_id_from_session = session.get('_user_id')
+    user_from_db = None
+    if user_id_from_session:
+        with app.app_context(): # Pastikan kita di app context untuk query DB
+            user_from_db = User.query.get(int(user_id_from_session))
+        print(f"[{datetime.now()}] DEBUG Middleware: User from DB (via session ID): {user_from_db.id if user_from_db else 'None'}")
+    
     if not current_user.is_authenticated:
         #print(f"[{datetime.now()}] DEBUG Middleware: Endpoint={request.endpoint}, Is Authenticated={current_user.is_authenticated}, User ID={current_user.id if current_user.is_authenticated else 'N/A'}") # TAMBAH USER ID
         #print(f"[{datetime.now()}] DEBUG Middleware: Current session in middleware: {session}") # BARU: Periksa sesi di middleware
         # Izinkan akses ke welcome, register, login, static files
         if request.endpoint in ['welcome', 'register', 'login', 'static', 'serve_qr_code']:
             return None
-        #print(f"[{datetime.now()}] DEBUG Middleware: Redirecting unauthenticated user from {request.endpoint} to welcome.")
+        print(f"[{datetime.now()}] DEBUG Middleware: User from DB (via session ID): {user_from_db.id if user_from_db else 'None'}")
         return redirect(url_for('welcome')) # Arahkan ke welcome jika belum login
+    
+    user = current_user if current_user.is_authenticated else user_from_db
+    
+    # Jika setelah upaya ini user masih None, berarti ada masalah serius
+    if not user:
+        print(f"[{datetime.now()}] DEBUG Middleware: Critical error - user object is None after all attempts.")
+        if request.endpoint in ['welcome', 'register', 'login', 'static', 'serve_qr_code']:
+            return None
+        return redirect(url_for('welcome')) # Fallback jika semua gagal
     
     # Lewati untuk endpoint API bot worker (sudah ditangani oleh api_key_auth)
     # Dan endpoint API UI untuk ambil settings (akan dicek di rute masing-masing)
@@ -137,16 +156,16 @@ def onboarding_redirect_middleware():
     if request.endpoint in ['logout', 'payment']:
         return None
 
-    user = current_user
+    
 
-    # Jika sudah berlangganan atau admin, arahkan ke dashboard normal
-    if user.is_subscribed or user.is_admin:
-        if request.endpoint in ['dashboard', 'ai_settings', 'tiktok_connect', 'ai_activity', 'comment_details']: # Izinkan akses ke semua rute normal
-            return None # Sudah di dashboard
-        # Jika sedang mengakses halaman onboarding, arahkan ke dashboard
-        if request.endpoint in ['onboarding_ai_settings', 'onboarding_tiktok_connect', 'onboarding_trial_cta']:
-            return redirect(url_for('dashboard'))
-        return None # Biarkan mengakses halaman yang diminta (selain onboarding)
+    # # Jika sudah berlangganan atau admin, arahkan ke dashboard normal
+    # if user.is_subscribed or user.is_admin:
+    #     if request.endpoint in ['dashboard', 'ai_settings', 'tiktok_connect', 'ai_activity', 'comment_details']: # Izinkan akses ke semua rute normal
+    #         return None # Sudah di dashboard
+    #     # Jika sedang mengakses halaman onboarding, arahkan ke dashboard
+    #     if request.endpoint in ['onboarding_ai_settings', 'onboarding_tiktok_connect', 'onboarding_trial_cta']:
+    #         return redirect(url_for('dashboard'))
+    #     return None # Biarkan mengakses halaman yang diminta (selain onboarding)
 
     # =========================================================================
     # Logika Pengalihan Onboarding untuk Pengguna yang Belum Berlangganan
@@ -162,7 +181,13 @@ def onboarding_redirect_middleware():
         'TRIAL_CTA': 'onboarding_trial_cta',
         'TRIAL_RUNNING': 'onboarding_trial_cta',
         'TRIAL_COMPLETED': 'onboarding_trial_cta',
+        'SUBSCRIBED': 'dashboard'
     }
+    
+    if user.is_subscribed or user.is_admin:
+        if request.endpoint in ['onboarding_ai_settings', 'onboarding_tiktok_connect', 'onboarding_trial_cta']:
+            return redirect(url_for('dashboard'))
+        return None # Biarkan mengakses rute normal lainnya
 
     expected_route_for_stage = onboarding_flow.get(user.onboarding_stage)
 
@@ -188,6 +213,8 @@ def welcome():
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
+    print(f"[{datetime.now()}] DEBUG Register Route: current_user.is_authenticated={current_user.is_authenticated}")
+    print(f"[{datetime.now()}] DEBUG Register Route: Session before form validation: {session}")
     if current_user.is_authenticated:
         return redirect(url_for('dashboard'))
 
@@ -206,13 +233,16 @@ def register():
         db.session.commit()
         flash('Akun Anda berhasil didaftarkan! Silakan masuk.', 'success')
         login_user(new_user)
-        # print(f"[{datetime.now()}] DEBUG Register: login_user dipanggil untuk user {new_user.id}. Mengalihkan ke onboarding_ai_settings.")
-        # print(f"[{datetime.now()}] DEBUG Register: Session after login_user: {session}") # BARU: Periksa sesi setelah login_user
+        print(f"[{datetime.now()}] DEBUG Register Route: login_user called for user {new_user.id}.")
+        print(f"[{datetime.now()}] DEBUG Register Route: Session after login_user: {session}")
         return redirect(url_for('onboarding_ai_settings')) 
     return render_template('register.html', form=form)
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    print(f"[{datetime.now()}] DEBUG Login Route: current_user.is_authenticated={current_user.is_authenticated}")
+    print(f"[{datetime.now()}] DEBUG Login Route: Session before form validation: {session}")
+   
     if current_user.is_authenticated:
         return redirect(url_for('dashboard'))
 
@@ -222,8 +252,8 @@ def login():
         if user and check_password_hash(user.password_hash, form.password.data):
             login_user(user, remember=form.remember_me.data)
             flash('Berhasil masuk!', 'success')
-            # print(f"[{datetime.now()}] DEBUG Login: login_user dipanggil untuk user {user.id}. Mengalihkan.")
-            # print(f"[{datetime.now()}] DEBUG Login: Session after login_user: {session}")
+            print(f"[{datetime.now()}] DEBUG Login Route: login_user called for user {user.id}.")
+            print(f"[{datetime.now()}] DEBUG Login Route: Session after login_user: {session}")
             next_page = request.args.get('next')
             if user.is_subscribed or user.is_admin:
                 return redirect(next_page or url_for('dashboard'))
