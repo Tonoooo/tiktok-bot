@@ -3,6 +3,9 @@ import json
 import base64
 from datetime import datetime, timedelta
 
+print(f"[{datetime.now()}] !!! SITONO APP.PY TELAH DIMUAT DAN DIJALANKAN !!!")
+print(f"[{datetime.now()}] DEBUG: Project root: {os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))}") 
+
 from flask import Flask, request, jsonify, render_template, redirect, url_for, flash, send_from_directory
 from flask_login import LoginManager, login_user, logout_user, current_user, login_required
 from werkzeug.security import generate_password_hash, check_password_hash
