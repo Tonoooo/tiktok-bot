@@ -60,6 +60,8 @@ login_manager.login_view = 'login'
 login_manager.login_message = "Harap masuk untuk mengakses halaman ini."
 login_manager.login_message_category = "warning"
 
+login_manager.session_protection = None
+
 @login_manager.user_loader
 def load_user(user_id):
     # print(f"[{datetime.now()}] DEBUG: load_user dipanggil dengan user_id: {user_id}")
