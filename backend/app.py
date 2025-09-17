@@ -45,9 +45,9 @@ app.config['SESSION_COOKIE_SECURE'] = True
 app.config['SESSION_COOKIE_HTTPONLY'] = True # Untuk keamanan, cookie hanya bisa diakses via HTTP
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax' # Pengaturan SameSite yang umum dan aman
 
-app.config['SERVER_NAME'] = 'sitono.online'
+# app.config['SERVER_NAME'] = 'sitono.online'
 
-app.config['SESSION_COOKIE_DOMAIN'] = '.sitono.online'
+# app.config['SESSION_COOKIE_DOMAIN'] = '.sitono.online'
 
 app.config['PREFERRED_URL_SCHEME'] = 'https' 
 
