@@ -57,7 +57,10 @@ login_manager.login_message_category = "warning"
 
 @login_manager.user_loader
 def load_user(user_id):
+    print(f"[{datetime.now()}] DEBUG: load_user dipanggil dengan user_id: {user_id}")
     user = User.query.get(int(user_id))
+    print(f"[{datetime.now()}] DEBUG: load_user mengembalikan user: {user.id if user else 'None'}")
+    print(f"[{datetime.now()}] DEBUG: Current session in load_user: {session}") # BARU: Periksa sesi di user_loader
     return user
 
 
@@ -108,13 +111,16 @@ def api_key_auth():
 # ===============================================
 # Middleware Pengalihan Onboarding (BARU)
 # ===============================================
-# @app.before_request
+@app.before_request
 def onboarding_redirect_middleware():
     # Lewati jika tidak ada user yang login atau sedang mengakses endpoint yang diizinkan
     if not current_user.is_authenticated:
+        print(f"[{datetime.now()}] DEBUG Middleware: Endpoint={request.endpoint}, Is Authenticated={current_user.is_authenticated}, User ID={current_user.id if current_user.is_authenticated else 'N/A'}") # TAMBAH USER ID
+        print(f"[{datetime.now()}] DEBUG Middleware: Current session in middleware: {session}") # BARU: Periksa sesi di middleware
         # Izinkan akses ke welcome, register, login, static files
         if request.endpoint in ['welcome', 'register', 'login', 'static', 'serve_qr_code']:
             return None
+        print(f"[{datetime.now()}] DEBUG Middleware: Redirecting unauthenticated user from {request.endpoint} to welcome.")
         return redirect(url_for('welcome')) # Arahkan ke welcome jika belum login
     
     # Lewati untuk endpoint API bot worker (sudah ditangani oleh api_key_auth)
@@ -195,6 +201,8 @@ def register():
         db.session.commit()
         flash('Akun Anda berhasil didaftarkan! Silakan masuk.', 'success')
         login_user(new_user)
+        print(f"[{datetime.now()}] DEBUG Register: login_user dipanggil untuk user {new_user.id}. Mengalihkan ke onboarding_ai_settings.")
+        print(f"[{datetime.now()}] DEBUG Register: Session after login_user: {session}") # BARU: Periksa sesi setelah login_user
         return redirect(url_for('onboarding_ai_settings')) 
     return render_template('register.html', form=form)
 
@@ -209,6 +217,8 @@ def login():
         if user and check_password_hash(user.password_hash, form.password.data):
             login_user(user, remember=form.remember_me.data)
             flash('Berhasil masuk!', 'success')
+            print(f"[{datetime.now()}] DEBUG Login: login_user dipanggil untuk user {user.id}. Mengalihkan.")
+            print(f"[{datetime.now()}] DEBUG Login: Session after login_user: {session}")
             next_page = request.args.get('next')
             if user.is_subscribed or user.is_admin:
                 return redirect(next_page or url_for('dashboard'))
