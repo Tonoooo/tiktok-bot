@@ -7,6 +7,7 @@ from flask import Flask, request, jsonify, render_template, redirect, url_for, f
 from flask_login import LoginManager, login_user, logout_user, current_user, login_required
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask import session
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 import sys
 from rq import Queue
