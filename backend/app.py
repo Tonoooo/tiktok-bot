@@ -41,9 +41,13 @@ app.config['SESSION_COOKIE_SECURE'] = True
 app.config['SESSION_COOKIE_HTTPONLY'] = True # Untuk keamanan, cookie hanya bisa diakses via HTTP
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax' # Pengaturan SameSite yang umum dan aman
 
-app.config['SERVER_NAME'] = 'sitono.online'
+# app.config['SERVER_NAME'] = 'sitono.online'
 
 app.config['SESSION_COOKIE_DOMAIN'] = '.sitono.online'
+
+app.config['PREFERRED_URL_SCHEME'] = 'https' 
+
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1) # Terapkan ProxyFix
 
 db.init_app(app)
 
