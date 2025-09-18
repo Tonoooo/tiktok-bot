@@ -63,17 +63,25 @@
                     <p class="mt-4 text-sm text-gray-500">Aman & cepat via QR Code TikTok. Tanpa password.</p>
                 </div>
                 <div class="relative" data-aos="fade-left" data-aos-delay="200">
-                    <img src="{{ url_for('static', filename='image/maskot/maskot_nunjuk.png') }}" alt="Maskot Sitono menunjuk ke contoh balasan AI" class="w-full max-w-lg mx-auto"/>
-                </div>
+                    <img 
+                      src="{{ url_for('static', filename='image/maskot/maskot_nunjuk.png') }}" 
+                      alt="Maskot Sitono menunjuk ke contoh balasan AI" 
+                      class="w-full max-w-lg mx-auto lg:scale-x-[-1]" 
+                    />
+                  </div>                  
             </div>
         </section>
 
         <section class="py-24 bg-white">
             <div class="mx-auto max-w-7xl px-4">
                 <div class="grid lg:grid-cols-2 gap-16 items-center">
-                    <div data-aos="fade-right">
-                        <img src="{{ url_for('static', filename='image/maskot/maskot_mikir.png') }}" alt="Maskot Sitono sedang berpikir menganalisis data" class="w-full max-w-md mx-auto">
-                    </div>
+                    <div data-aos="fade-right" class="hidden md:block">
+                        <img 
+                          src="{{ url_for('static', filename='image/maskot/maskot_mikir.png') }}" 
+                          alt="Maskot Sitono sedang berpikir menganalisis data" 
+                          class="mx-auto max-h-80"
+                        >
+                      </div>                      
                     <div data-aos="fade-left" data-aos-delay="200">
                         <h2 class="text-3xl md:text-4xl font-extrabold tracking-tight">Karyawan AI Terbaik, Dibuat Khusus untuk Anda</h2>
                         <p class="mt-4 text-gray-600">Bukan sekadar bot biasa. Sitono dirancang dengan satu tujuan: membuat hidup Anda sebagai kreator & afiliator lebih mudah dan menguntungkan.</p>
@@ -145,16 +153,13 @@
                     <img src="{{ url_for('static', filename='image/komen/reply3.png') }}" class="rounded-xl shadow-lg hover:shadow-2xl hover:scale-105 transition-all duration-300" alt="Contoh balasan otomatis 3" data-aos="fade-up" data-aos-delay="300">
                 </div>
                 <div class="mt-16 grid lg:grid-cols-5 gap-8 items-center" data-aos="fade-up">
-                    <div class="lg:col-span-2">
-                        <img src="{{ url_for('static', filename='image/maskot/maskot_jempol.png') }}" alt="Maskot Sitono memberikan jempol" class="w-full max-w-xs mx-auto">
+                    <div class="lg:col-span-2 flex justify-center">
+                      <img 
+                        src="{{ url_for('static', filename='image/maskot/maskot_jempol.png') }}" 
+                        alt="Maskot Sitono memberikan jempol" 
+                        class="max-h-80 w-auto"
+                      >
                     </div>
-                    <!-- <div class="lg:col-span-3 bg-gray-50 rounded-2xl p-8 border">
-                        <p class="text-xl italic text-gray-700">"Serius, ini game changer. Dulu bisa habis 2 jam sehari cuma buat balas 'spill produk'. Sekarang semua dibalas otomatis sama Sitono, jadi bisa fokus riset produk baru. Komisi bulan ini rekor!"</p>
-                        <div class="mt-6">
-                            <p class="font-bold">Aulia Putri</p>
-                            <p class="text-sm text-gray-500">TikTok Affiliate Creator (@auliacreative)</p>
-                        </div>
-                    </div> -->
                 </div>
             </div>
         </section>
