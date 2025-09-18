@@ -1,39 +1,441 @@
-{% extends "base.html" %}
+<!DOCTYPE html>
+<html lang="id" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Sitono AI — Asisten AI Cerdas untuk Komentar TikTok Shop</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
+    <meta name="description" content="Sitono AI adalah asisten cerdas yang mendeteksi dan membalas komentar khusus di video keranjang kuning Anda, 24/7. Ubah setiap pertanyaan menjadi potensi penjualan tanpa repot."/>
+    
+    <style>
+        body { font-family: 'Poppins', sans-serif; }
+        .text-gradient {
+            background: linear-gradient(90deg, #4F46E5, #D946EF);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .bg-gradient-hero {
+            background: radial-gradient(circle, rgba(240,243,255,1) 0%, rgba(255,255,255,1) 100%);
+        }
+        .bg-gradient-pricing {
+            background: linear-gradient(135deg, #4338CA, #C026D3);
+        }
+        /* Styling untuk FAQ Accordion */
+        .faq-question { cursor: pointer; }
+        .faq-answer { max-height: 0; overflow: hidden; transition: max-height 0.3s ease-in-out; }
+        .faq-question.active .faq-arrow { transform: rotate(180deg); }
+    </style>
+</head>
+<body class="bg-white text-gray-900 antialiased">
 
-{% block title %}Selamat Datang!{% endblock %}
+    <header class="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-gray-200/80">
+        <div class="mx-auto max-w-7xl px-4 py-4 flex items-center justify-between">
+            <a href="{{ url_for('welcome') }}" class="text-2xl font-extrabold tracking-tight">
+                <span class="text-indigo-600">Si</span>Tono<span class="text-sm font-semibold text-gray-400 ml-1">AI</span>
+            </a>
+            <div class="flex items-center gap-3">
+                {% if current_user.is_authenticated %}
+                    <span class="hidden sm:inline text-sm text-gray-600">Halo, {{ current_user.username }}!</span>
+                    <a href="{{ url_for('logout') }}" class="px-4 py-2 rounded-lg bg-red-500 hover:bg-red-600 text-white font-semibold transition-colors">Keluar</a>
+                {% else %}
+                    <a href="#pricing" class="hidden sm:inline px-4 py-2 text-indigo-600 font-semibold hover:text-indigo-800 transition-colors">Harga</a>
+                    <a href="{{ url_for('register') }}" class="px-5 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white font-semibold shadow-sm transition-transform hover:scale-105">Daftar Sekarang</a>
+                {% endif %}
+            </div>
+        </div>
+    </header>
 
-{% block content %}
-<div class="text-center py-16 px-4 sm:px-6 lg:px-8">
-    <h1 class="text-4xl font-extrabold text-gray-900 sm:text-5xl md:text-6xl">
-        <span class="block text-blue-600">Sitono AI</span>
-        <span class="block text-gray-800 mt-2">Balas Komentar Otomatis, Tanpa Batas</span>
-    </h1>
-    <p class="mt-6 max-w-2xl mx-auto text-xl text-gray-500">
-        Maksimalkan interaksi di TikTok Shop Anda dengan AI yang membalas komentar pelanggan 24/7. Hemat waktu, tingkatkan penjualan!
-    </p>
-    <div class="mt-10 flex flex-col sm:flex-row justify-center gap-4">
-        <a href="{{ url_for('register') }}" class="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-8 rounded-lg text-lg transition duration-300 ease-in-out transform hover:-translate-y-1">
-            Daftar Sekarang
-        </a>
-        <a href="{{ url_for('login') }}" class="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-lg text-lg transition duration-300 ease-in-out transform hover:-translate-y-1">
-            Sudah Punya Akun? Masuk
-        </a>
+    <main>
+        <section class="relative bg-gradient-hero overflow-hidden">
+            <div class="mx-auto max-w-7xl px-4 pt-20 pb-24 grid lg:grid-cols-2 gap-16 items-center">
+                <div data-aos="fade-right">
+                    <h1 class="text-4xl md:text-5xl font-black leading-tight tracking-tighter">
+                        Asisten AI Cerdas untuk <span class="text-gradient">TikTok Shop Anda</span>
+                    </h1>
+                    <p class="mt-5 text-lg text-gray-700">
+                        Sitono AI secara otomatis mendeteksi & membalas komentar di video <span class="font-bold text-indigo-600">keranjang kuning</span> Anda, 24/7. Ubah setiap pertanyaan menjadi potensi penjualan tanpa repot.
+                    </p>
+                    <div class="mt-8 flex items-center gap-4">
+                        <a href="{{ url_for('register') }}" class="px-8 py-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-lg transition-transform hover:scale-105 inline-block">Coba Gratis 1x Jalankan AI</a>
+                    </div>
+                    <p class="mt-4 text-sm text-gray-500">Aman & cepat via QR Code TikTok. Tanpa password.</p>
+                </div>
+                <div class="relative" data-aos="fade-left" data-aos-delay="200">
+                    <img src="{{ url_for('static', filename='image/maskot_nunjuk.png') }}" alt="Maskot Sitono menunjuk ke contoh balasan AI" class="w-full max-w-lg mx-auto"/>
+                </div>
+            </div>
+        </section>
+
+        <section class="py-24 bg-white">
+            <div class="mx-auto max-w-7xl px-4">
+                <div class="grid lg:grid-cols-2 gap-16 items-center">
+                    <div data-aos="fade-right">
+                        <img src="{{ url_for('static', filename='image/maskot_mikir.png') }}" alt="Maskot Sitono sedang berpikir menganalisis data" class="w-full max-w-md mx-auto">
+                    </div>
+                    <div data-aos="fade-left" data-aos-delay="200">
+                        <h2 class="text-3xl md:text-4xl font-extrabold tracking-tight">Karyawan AI Terbaik, Dibuat Khusus untuk Anda</h2>
+                        <p class="mt-4 text-gray-600">Bukan sekadar bot biasa. Sitono dirancang dengan satu tujuan: membuat hidup Anda sebagai kreator & afiliator lebih mudah dan menguntungkan.</p>
+                        <div class="mt-8 space-y-6">
+                            <div class="flex gap-4">
+                                <div class="flex-shrink-0 w-10 h-10 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold">1</div>
+                                <div>
+                                    <h3 class="font-bold text-lg">AI Kontekstual Cerdas</h3>
+                                    <p class="text-gray-600 mt-1">Sitono memahami isi video Anda, bukan hanya membalas template. Hasilnya? Interaksi yang terasa asli dan personal.</p>
+                                </div>
+                            </div>
+                            <div class="flex gap-4">
+                                <div class="flex-shrink-0 w-10 h-10 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold">2</div>
+                                <div>
+                                    <h3 class="font-bold text-lg">Fokus 100% pada TikTok Shop</h3>
+                                    <p class="text-gray-600 mt-1">AI kami secara pintar hanya menargetkan video dengan keranjang kuning, memastikan setiap balasan relevan untuk penjualan.</p>
+                                </div>
+                            </div>
+                             <div class="flex gap-4">
+                                <div class="flex-shrink-0 w-10 h-10 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold">3</div>
+                                <div>
+                                    <h3 class="font-bold text-lg">Onboarding Super Cepat</h3>
+                                    <p class="text-gray-600 mt-1">Tanpa setting rumit. Cukup Scan QR Code, atur persona, dan biarkan Sitono bekerja dalam hitungan menit.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="bg-gray-50 py-24">
+            <div class="mx-auto max-w-7xl px-4">
+                <div class="text-center" data-aos="fade-up">
+                    <h2 class="text-3xl md:text-4xl font-extrabold tracking-tight">Mulai dalam 3 Langkah Mudah</h2>
+                    <p class="mt-3 max-w-2xl mx-auto text-gray-600">Aktifkan asisten AI Anda dan lihat hasilnya bekerja kurang dari 5 menit.</p>
+                </div>
+                <div class="mt-16 grid md:grid-cols-3 gap-8 text-center relative">
+                    <div class="hidden md:block absolute top-1/2 left-0 w-full h-0.5 bg-gray-200 -translate-y-1/2"></div>
+                    
+                    <div class="relative bg-gray-50 p-6" data-aos="fade-up" data-aos-delay="100">
+                        <div class="mx-auto w-16 h-16 rounded-full bg-indigo-600 text-white border-4 border-gray-50 flex items-center justify-center font-bold text-2xl shadow-lg">1</div>
+                        <h3 class="font-bold text-lg mt-6">Hubungkan Akun</h3>
+                        <p class="text-gray-600 text-sm mt-2">Scan QR Code dari aplikasi TikTok Anda. 100% aman tanpa password.</p>
+                    </div>
+                    <div class="relative bg-gray-50 p-6" data-aos="fade-up" data-aos-delay="200">
+                        <div class="mx-auto w-16 h-16 rounded-full bg-indigo-600 text-white border-4 border-gray-50 flex items-center justify-center font-bold text-2xl shadow-lg">2</div>
+                        <h3 class="font-bold text-lg mt-6">Atur Persona AI</h3>
+                        <p class="text-gray-600 text-sm mt-2">Tentukan gaya bicara AI (santai, formal, jenaka) agar sesuai karakter Anda.</p>
+                    </div>
+                    <div class="relative bg-gray-50 p-6" data-aos="fade-up" data-aos-delay="300">
+                        <div class="mx-auto w-16 h-16 rounded-full bg-indigo-600 text-white border-4 border-gray-50 flex items-center justify-center font-bold text-2xl shadow-lg">3</div>
+                        <h3 class="font-bold text-lg mt-6">Langganan & Santai</h3>
+                        <p class="text-gray-600 text-sm mt-2">Pilih paket, dan biarkan Sitono memaksimalkan setiap komentar jadi cuan.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+        
+        <section class="py-24">
+            <div class="mx-auto max-w-7xl px-4">
+                <div class="text-center" data-aos="fade-up">
+                    <h2 class="text-3xl md:text-4xl font-extrabold tracking-tight">Jangan Percaya Kata Kami, Lihat Sendiri Hasilnya</h2>
+                    <p class="mt-3 max-w-2xl mx-auto text-gray-600">Interaksi cerdas yang meningkatkan kepercayaan dan mendorong audiens untuk checkout.</p>
+                </div>
+                <div class="mt-12 grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <img src="{{ url_for('static', filename='image/reply1.png') }}" class="rounded-xl shadow-lg hover:shadow-2xl hover:scale-105 transition-all duration-300" alt="Contoh balasan otomatis 1" data-aos="fade-up" data-aos-delay="100">
+                    <img src="{{ url_for('static', filename='image/reply2.png') }}" class="rounded-xl shadow-lg hover:shadow-2xl hover:scale-105 transition-all duration-300" alt="Contoh balasan otomatis 2" data-aos="fade-up" data-aos-delay="200">
+                    <img src="{{ url_for('static', filename='image/reply3.png') }}" class="rounded-xl shadow-lg hover:shadow-2xl hover:scale-105 transition-all duration-300" alt="Contoh balasan otomatis 3" data-aos="fade-up" data-aos-delay="300">
+                </div>
+                <div class="mt-16 grid lg:grid-cols-5 gap-8 items-center" data-aos="fade-up">
+                    <div class="lg:col-span-2">
+                        <img src="{{ url_for('static', filename='image/maskot_jempol.png') }}" alt="Maskot Sitono memberikan jempol" class="w-full max-w-xs mx-auto">
+                    </div>
+                    {% comment %} <div class="lg:col-span-3 bg-gray-50 rounded-2xl p-8 border">
+                        <p class="text-xl italic text-gray-700">"Serius, ini game changer. Dulu bisa habis 2 jam sehari cuma buat balas 'spill produk'. Sekarang semua dibalas otomatis sama Sitono, jadi bisa fokus riset produk baru. Komisi bulan ini rekor!"</p>
+                        <div class="mt-6">
+                            <p class="font-bold">Aulia Putri</p>
+                            <p class="text-sm text-gray-500">TikTok Affiliate Creator (@auliacreative)</p>
+                        </div>
+                    </div> {% endcomment %}
+                </div>
+            </div>
+        </section>
+
+        <section id="pricing" class="bg-gray-50 py-24">
+            <div class="mx-auto max-w-7xl px-4">
+                <div class="text-center" data-aos="fade-up">
+                    <h2 class="text-3xl md:text-4xl font-extrabold tracking-tight">Investasi Terbaik untuk Akun TikTok Shop Anda</h2>
+                    <p class="mt-3 max-w-2xl mx-auto text-gray-600">Mulai gratis untuk mencoba, lalu pilih paket promo terbaik kami. Tanpa risiko.</p>
+                </div>
+                <div class="mt-12 grid lg:grid-cols-2 gap-8 items-center max-w-4xl mx-auto">
+                    <div class="border-2 border-indigo-600 rounded-3xl p-8 bg-white text-gray-900 shadow-2xl relative" data-aos="fade-right">
+                        <div class="absolute top-0 right-8 -mt-4">
+                            <span class="inline-block px-4 py-1 bg-gradient-pricing text-white text-sm font-bold rounded-full">Grand Opening</span>
+                        </div>
+                        <h3 class="text-xl font-bold">Afiliator Pro</h3>
+                        <p class="text-sm text-gray-500">Promo spesial untuk 10 pengguna pertama!</p>
+                        <p class="mt-4 text-5xl font-extrabold">Rp50.000<span class="text-base font-medium text-gray-500">/bulan</span></p>
+                        <p class="line-through text-gray-400">Harga normal Rp100.000</p>
+                        <div class="my-6 h-px bg-gray-200"></div>
+                        <ul class="space-y-3">
+                            <li class="flex items-center gap-3"><svg class="w-5 h-5 text-indigo-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path></svg><span class="font-semibold">Auto-reply 10 video terbaru</span></li>
+                            <li class="flex items-center gap-3"><svg class="w-5 h-5 text-indigo-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path></svg><span class="font-semibold">Hingga 3x proses per hari</span></li>
+                            <li class="flex items-center gap-3"><svg class="w-5 h-5 text-indigo-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path></svg><span class="font-semibold">Atur jadwal & persona AI</span></li>
+                            <li class="flex items-center gap-3"><svg class="w-5 h-5 text-indigo-500" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path></svg><span class="font-semibold">Dukungan prioritas (Email/WA)</span></li>
+                        </ul>
+                         <div class="mt-6 bg-yellow-50 text-yellow-800 p-3 rounded-lg text-center text-sm font-semibold">
+                            Sisa promo: <span id="countdown"></span>
+                        </div>
+                        <a href="{{ url_for('register') }}" class="mt-6 block w-full text-center px-6 py-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-md transition-transform hover:scale-105">Klaim Promo 50% Sekarang</a>
+                    </div>
+                    <div class="border rounded-3xl p-8 bg-white" data-aos="fade-left">
+                        <h3 class="text-xl font-bold">Uji Coba Gratis</h3>
+                        <p class="text-sm text-gray-500">Rasakan keajaibannya, tanpa komitmen.</p>
+                        <p class="mt-4 text-5xl font-extrabold text-gray-800">Gratis</p>
+                        <p class="text-gray-500">1x Jalankan AI</p>
+                        <div class="my-6 h-px bg-gray-200"></div>
+                        <ul class="space-y-3 text-gray-700">
+                             <li class="flex items-center gap-3"><svg class="w-5 h-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path></svg><span>Uji coba di 10 video terbaru</span></li>
+                             <li class="flex items-center gap-3"><svg class="w-5 h-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path></svg><span>Integrasi aman via QR Code</span></li>
+                             <li class="flex items-center gap-3"><svg class="w-5 h-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path></svg><span>Lihat ringkasan hasil balasan</span></li>
+                        </ul>
+                        <div class="my-6 h-px bg-white"></div>
+                        <a href="{{ url_for('register') }}" class="mt-6 block w-full text-center px-6 py-3.5 rounded-xl bg-gray-800 hover:bg-gray-900 text-white font-bold shadow-sm transition-transform hover:scale-105">Mulai Uji Coba Gratis</a>
+                    </div>
+                </div>
+                 <div class="mt-12 text-center text-sm text-gray-600 bg-white border rounded-lg p-4 max-w-2xl mx-auto" data-aos="fade-up">
+                    ⭐ **Garansi 100% Uang Kembali.** Jika dalam 24 jam pertama langganan Anda Sitono tidak membalas komentar sama sekali, kami kembalikan dana Anda sepenuhnya. <button class="underline font-semibold" onclick="openModal('refundModal')">Baca S&K</button>.
+                </div>
+            </div>
+        </section>
+        
+        <section class="py-24">
+             <div class="mx-auto max-w-3xl px-4">
+                <div class="text-center" data-aos="fade-up">
+                    <h2 class="text-3xl md:text-4xl font-extrabold tracking-tight">Masih Ragu? Kami Jawab di Sini</h2>
+                </div>
+                <div class="mt-12 space-y-4" data-aos="fade-up" data-aos-delay="200">
+                    </div>
+            </div>
+        </section>
+
+        <section class="bg-gray-50 py-20">
+            <div class="mx-auto max-w-3xl px-4">
+                <div class="text-center" data-aos="fade-up">
+                    <h2 class="text-3xl md:text-4xl font-extrabold">Pertanyaan Umum</h2>
+                    <p class="mt-3 text-gray-600">Masih ragu? Kami jawab keraguan Anda di sini.</p>
+                </div>
+                <div class="mt-12 space-y-4" id="faq-container" data-aos="fade-up" data-aos-delay="200">
+                    <div class="bg-white border rounded-lg">
+                        <div class="faq-question flex justify-between items-center p-5">
+                            <h3 class="font-semibold">Apakah Sitono AI aman untuk akun TikTok saya?</h3>
+                            <svg class="w-5 h-5 text-gray-500 transition-transform faq-arrow" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                        </div>
+                        <div class="faq-answer px-5 pb-5 text-gray-600">
+                            <p><strong>Sangat aman.</strong> Sitono menggunakan metode login via QR Code resmi dari TikTok. Kami tidak pernah meminta atau menyimpan password Anda. Akses yang kami minta hanya sebatas untuk membaca dan membalas komentar, sesuai fungsi utama layanan.</p>
+                        </div>
+                    </div>
+                    <div class="bg-white border rounded-lg">
+                        <div class="faq-question flex justify-between items-center p-5">
+                            <h3 class="font-semibold">Apakah ini melanggar Peraturan Komunitas TikTok?</h3>
+                            <svg class="w-5 h-5 text-gray-500 transition-transform faq-arrow" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                        </div>
+                        <div class="faq-answer px-5 pb-5 text-gray-600">
+                            <p>Tidak. Sitono dirancang untuk berinteraksi secara natural dan kontekstual, bukan untuk spamming. Selama Anda mengatur persona AI untuk memberikan balasan yang bermanfaat dan tidak menyesatkan, penggunaan Sitono sejalan dengan tujuan TikTok untuk meningkatkan interaksi yang berkualitas.</p>
+                        </div>
+                    </div>
+                    <div class="bg-white border rounded-lg">
+                        <div class="faq-question flex justify-between items-center p-5">
+                            <h3 class="font-semibold">Bagaimana jika balasan AI-nya tidak sesuai?</h3>
+                            <svg class="w-5 h-5 text-gray-500 transition-transform faq-arrow" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                        </div>
+                        <div class="faq-answer px-5 pb-5 text-gray-600">
+                            <p>Anda memiliki kontrol penuh atas "Karakter/Gaya Bicara" AI saat onboarding. Semakin detail Anda memberikan instruksi (contoh: "selalu ramah, gunakan emoji, dan ajak cek keranjang kuning"), semakin akurat balasannya. Tim kami juga terus meningkatkan kecerdasan AI setiap hari.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <footer class="bg-gray-900 text-gray-300">
+        <div class="mx-auto max-w-6xl px-4 py-16">
+            <div class="grid md:grid-cols-3 gap-8">
+                <div>
+                    <div class="text-2xl font-extrabold text-white"><span class="text-indigo-500">Si</span>Tono<span class="text-sm text-gray-400 ml-1">AI</span></div>
+                    <p class="mt-3 text-sm text-gray-400">Asisten AI cerdas untuk para kreator dan afiliator TikTok di Indonesia.</p>
+                </div>
+                <div>
+                    <h4 class="font-semibold text-white">Legal & Kebijakan</h4>
+                    <ul class="mt-3 text-sm space-y-2">
+                        <li><button onclick="openModal('termsModal')" class="text-gray-400 hover:text-white hover:underline">Syarat & Ketentuan</button></li>
+                        <li><button onclick="openModal('privacyModal')" class="text-gray-400 hover:text-white hover:underline">Kebijakan Privasi</button></li>
+                        <li><button onclick="openModal('refundModal')" class="text-gray-400 hover:text-white hover:underline">Kebijakan Pengembalian Dana</button></li>
+                    </ul>
+                </div>
+                <div>
+                    <h4 class="font-semibold text-white">Hubungi Kami</h4>
+                    <ul class="mt-3 text-sm space-y-2 text-gray-400">
+                      <li>Email: <a href="mailto:support@sitono.online" class="hover:text-white hover:underline">support@sitono.online</a></li>
+                      <li>WhatsApp: <a href="https://wa.me/628xxxxxxxxxx" target="_blank" class="hover:text-white hover:underline">08xx-xxxx-xxxx</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="border-t border-gray-800 mt-12 pt-8 text-center text-sm text-gray-500">
+                <p>© {{ datetime.now().year }} Sitono AI. Dibuat dengan ❤️ untuk para pejuang cuan.</p>
+            </div>
+        </div>
+    </footer>
+
+    <div id="modalBackdrop" class="hidden fixed inset-0 bg-black/60 z-40" onclick="closeAllModals()"></div>
+
+    <div id="termsModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="bg-white max-w-2xl w-full rounded-2xl shadow-2xl transform transition-all" onclick="event.stopPropagation()">
+            <div class="flex items-center justify-between border-b p-5">
+                <h3 class="font-bold text-lg">Syarat & Ketentuan Penggunaan</h3>
+                <button class="text-gray-400 hover:text-gray-800" onclick="closeModal('termsModal')">✕</button>
+            </div>
+            <div class="p-6 max-h-[70vh] overflow-y-auto text-sm text-gray-700 space-y-4">
+                <h4 class="font-semibold">1. Penerimaan Persyaratan</h4>
+                <p>Dengan mendaftar dan menggunakan layanan Sitono AI ("Layanan"), Anda setuju untuk terikat oleh Syarat & Ketentuan ini. Jika Anda tidak setuju, mohon untuk tidak menggunakan Layanan kami.</p>
+                <h4 class="font-semibold">2. Deskripsi Layanan</h4>
+                <p>Sitono AI menyediakan perangkat lunak sebagai layanan (SaaS) untuk mengotomatisasi balasan komentar di platform TikTok berdasarkan input dan pengaturan dari pengguna. Layanan berjalan sesuai batasan paket yang dipilih, yaitu memproses 10 video terbaru hingga 3 kali sehari.</p>
+                <h4 class="font-semibold">3. Kewajiban Pengguna</h4>
+                <ul class="list-disc pl-5 space-y-1">
+                    <li>Anda bertanggung jawab penuh atas konten dan karakter balasan yang Anda atur.</li>
+                    <li>Anda setuju untuk tidak menggunakan Layanan untuk tujuan ilegal, spamming, atau melanggar Peraturan Komunitas TikTok.</li>
+                    <li>Anda bertanggung jawab menjaga keamanan akses ke akun TikTok Anda. Sitono AI tidak bertanggung jawab atas penyalahgunaan akun yang disebabkan oleh kelalaian pengguna.</li>
+                </ul>
+                <h4 class="font-semibold">4. Pembatasan Tanggung Jawab</h4>
+                <p>Sitono AI berusaha memberikan layanan terbaik, namun tidak menjamin peningkatan penjualan atau engagement secara spesifik. Kinerja layanan dapat dipengaruhi oleh perubahan kebijakan dari pihak TikTok.</p>
+            </div>
+            <div class="p-4 bg-gray-50 border-t text-right rounded-b-2xl">
+                <button class="px-5 py-2 rounded-lg bg-indigo-600 text-white font-semibold" onclick="closeModal('termsModal')">Saya Mengerti</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="privacyModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="bg-white max-w-2xl w-full rounded-2xl shadow-2xl transform transition-all" onclick="event.stopPropagation()">
+             <div class="flex items-center justify-between border-b p-5">
+                <h3 class="font-bold text-lg">Kebijakan Privasi</h3>
+                <button class="text-gray-400 hover:text-gray-800" onclick="closeModal('privacyModal')">✕</button>
+            </div>
+             <div class="p-6 max-h-[70vh] overflow-y-auto text-sm text-gray-700 space-y-4">
+                <h4 class="font-semibold">1. Data yang Kami Kumpulkan</h4>
+                <p>Untuk menjalankan Layanan, kami mengumpulkan data berikut:</p>
+                <ul class="list-disc pl-5 space-y-1">
+                    <li><strong>Informasi Akun:</strong> Username dan email Anda saat mendaftar di Sitono.</li>
+                    <li><strong>Akses TikTok:</strong> Token otorisasi yang aman (diperoleh via QR Code) untuk membaca dan membalas komentar. Kami <strong>tidak pernah</strong> menyimpan password TikTok Anda.</li>
+                    <li><strong>Data Operasional:</strong> Konten komentar yang masuk, teks balasan yang dihasilkan, ID video, dan data penggunaan untuk analisis dan peningkatan layanan.</li>
+                </ul>
+                <h4 class="font-semibold">2. Penggunaan Data</h4>
+                <p>Data Anda digunakan secara eksklusif untuk:</p>
+                 <ul class="list-disc pl-5 space-y-1">
+                    <li>Menjalankan fungsi utama auto-reply.</li>
+                    <li>Memberikan dukungan pelanggan.</li>
+                    <li>Meningkatkan kualitas dan akurasi model AI kami.</li>
+                    <li>Mengirimkan informasi penting terkait layanan.</li>
+                </ul>
+                <h4 class="font-semibold">3. Keamanan Data</h4>
+                <p>Kami menerapkan standar keamanan terbaik untuk melindungi data Anda dari akses tidak sah. Semua koneksi dienkripsi menggunakan SSL.</p>
+             </div>
+             <div class="p-4 bg-gray-50 border-t text-right rounded-b-2xl">
+                <button class="px-5 py-2 rounded-lg bg-indigo-600 text-white font-semibold" onclick="closeModal('privacyModal')">Saya Mengerti</button>
+            </div>
+        </div>
     </div>
     
-    <!-- Bagian Copywriting Lanjutan (Opsional) -->
-    <div class="mt-20 grid grid-cols-1 md:grid-cols-3 gap-8 text-left max-w-4xl mx-auto">
-        <div class="p-6 bg-white rounded-lg shadow-md">
-            <h3 class="text-xl font-semibold text-gray-900 mb-3">Interaksi Otomatis</h3>
-            <p class="text-gray-600">AI kami membalas setiap komentar di video TikTok Shop Anda secara otomatis, 24 jam sehari, 7 hari seminggu.</p>
-        </div>
-        <div class="p-6 bg-white rounded-lg shadow-md">
-            <h3 class="text-xl font-semibold text-gray-900 mb-3">Persona Kreator</h3>
-            <p class="text-gray-600">Balasan disesuaikan dengan persona kreator Anda (gender, usia, karakter) untuk pengalaman yang natural dan autentik.</p>
-        </div>
-        <div class="p-6 bg-white rounded-lg shadow-md">
-            <h3 class="text-xl font-semibold text-gray-900 mb-3">Fokus pada Penjualan</h3>
-            <p class="text-gray-600">AI mampu membedakan komentar dan memprioritaskan ajakan bertindak untuk "keranjang kuning" atau "link di bio".</p>
+    <div id="refundModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="bg-white max-w-2xl w-full rounded-2xl shadow-2xl transform transition-all" onclick="event.stopPropagation()">
+             <div class="flex items-center justify-between border-b p-5">
+                <h3 class="font-bold text-lg">Kebijakan Pengembalian Dana</h3>
+                <button class="text-gray-400 hover:text-gray-800" onclick="closeModal('refundModal')">✕</button>
+            </div>
+             <div class="p-6 max-h-[70vh] overflow-y-auto text-sm text-gray-700 space-y-4">
+                <h4 class="font-semibold">Jaminan Kepuasan 24 Jam</h4>
+                <p>Kami menawarkan <strong>garansi 100% uang kembali</strong> untuk pengguna langganan pertama kali. Garansi ini dapat diklaim jika dalam <strong>24 jam pertama</strong> setelah aktivasi pembayaran, Layanan Sitono AI tidak memberikan balasan komentar sama sekali pada video Anda yang memenuhi syarat.</p>
+                <h4 class="font-semibold">Syarat & Ketentuan Garansi:</h4>
+                <ul class="list-disc pl-5 space-y-1">
+                    <li>Hanya berlaku untuk pembayaran langganan pertama pada sebuah akun. Tidak berlaku untuk perpanjangan.</li>
+                    <li>Klaim harus diajukan melalui email support (support@sitono.online) dalam waktu maksimal 48 jam sejak aktivasi, dengan menyertakan username dan bukti pembayaran.</li>
+                    <li>Garansi tidak berlaku jika kegagalan layanan disebabkan oleh faktor eksternal, seperti: video di-private/dihapus, izin akses ke akun TikTok dicabut oleh pengguna, atau akun TikTok Anda terkena batasan dari pihak TikTok.</li>
+                    <li>Setelah 24 jam pertama, biaya langganan yang sudah dibayarkan tidak dapat dikembalikan.</li>
+                </ul>
+             </div>
+             <div class="p-4 bg-gray-50 border-t text-right rounded-b-2xl">
+                <button class="px-5 py-2 rounded-lg bg-indigo-600 text-white font-semibold" onclick="closeModal('refundModal')">Saya Mengerti</button>
+            </div>
         </div>
     </div>
-</div>
-{% endblock %}
+    
+    <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+    <script>
+        // Inisialisasi Animate on Scroll
+        AOS.init({
+            duration: 800,
+            once: true,
+            offset: 100
+        });
+
+        // Countdown Timer untuk Promo
+        const countdownElement = document.getElementById('countdown');
+        // Atur tanggal akhir promo (misal: 7 hari dari sekarang)
+        const promoEndDate = new Date();
+        promoEndDate.setDate(promoEndDate.getDate() + 7);
+
+        const countdownInterval = setInterval(() => {
+            const now = new Date().getTime();
+            const distance = promoEndDate - now;
+
+            const days = Math.floor(distance / (1000 * 60 * 60 * 24));
+            const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+
+            if(countdownElement) {
+                countdownElement.innerHTML = `${days} hari ${hours} jam ${minutes} mnt ${seconds} dtk`;
+            }
+
+            if (distance < 0) {
+                clearInterval(countdownInterval);
+                if(countdownElement) {
+                    countdownElement.innerHTML = "PROMO BERAKHIR";
+                }
+            }
+        }, 1000);
+
+         // Logika FAQ Accordion
+         document.getElementById('faq-container').addEventListener('click', function(e) {
+            const question = e.target.closest('.faq-question');
+            if (question) {
+                const answer = question.nextElementSibling;
+                question.classList.toggle('active');
+                if (question.classList.contains('active')) {
+                    answer.style.maxHeight = answer.scrollHeight + 'px';
+                } else {
+                    answer.style.maxHeight = '0';
+                }
+            }
+        });
+
+        // Logika Modal
+        const modalBackdrop = document.getElementById('modalBackdrop');
+        function openModal(id) {
+            modalBackdrop.classList.remove('hidden');
+            document.getElementById(id).classList.remove('hidden');
+        }
+        function closeModal(id) {
+            document.getElementById(id).classList.add('hidden');
+            // Cek jika semua modal tertutup
+            const allModals = document.querySelectorAll('[id$="Modal"]');
+            if ([...allModals].every(m => m.classList.contains('hidden'))) {
+                modalBackdrop.classList.add('hidden');
+            }
+        }
+        function closeAllModals() {
+            modalBackdrop.classList.add('hidden');
+            document.querySelectorAll('[id$="Modal"]').forEach(m => m.classList.add('hidden'));
+        }
+    </script>
+</body>
+</html>
