@@ -9,11 +9,12 @@
     <style>
         /* Anda bisa menambahkan CSS kustom di sini jika diperlukan */
     </style>
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon/favicon.ico') }}">
 </head>
 <body class="bg-gray-100 flex flex-col min-h-screen">
     <header class="bg-white shadow-md p-4">
         <nav class="container mx-auto flex justify-between items-center">
-            <a href="{{ url_for('welcome') }}" class="text-2xl font-bold text-blue-600">Sitono AI</a>
+            <a href="{{ url_for('dashboard') }}" class="text-2xl font-bold text-blue-600">Sitono AI</a>
             <div>
                 {% if current_user.is_authenticated %}
                     <span class="text-gray-700 mr-4">Halo, {{ current_user.username }}!</span>
