@@ -4,6 +4,7 @@ from wtforms.validators import DataRequired, Email, EqualTo, ValidationError, Nu
 from backend.models import User # Menggunakan User dari models.py
 from flask_login import current_user 
 from backend.models import User
+from wtforms.validators import DataRequired, Email, EqualTo, ValidationError, NumberRange, Optional
 
 class RegistrationForm(FlaskForm):
     username = StringField('Nama Pengguna', validators=[DataRequired()])
@@ -30,12 +31,16 @@ class LoginForm(FlaskForm):
     submit = SubmitField('Masuk')
     
 class AiSettingsForm(FlaskForm):
-    tiktok_username = StringField('Nama Pengguna TikTok', description='Nama pengguna TikTok (tanpa "@") yang akan dipantau oleh AI. Harus unik untuk setiap klien.')
-    creator_character_description = StringField('Deskripsi Karakter Kreator', description='Contoh: "pria, usia 20-an, tegas, suka humor". AI akan meniru karakter ini saat membalas.')
+    tiktok_username = StringField('Nama Pengguna TikTok', 
+                                  validators=[DataRequired(message="Nama pengguna TikTok tidak boleh kosong.")],
+                                  description='Nama pengguna TikTok (tanpa "@") yang akan dipantau oleh AI. Harus unik untuk setiap klien.')
+    creator_character_description = StringField('Deskripsi Karakter Kreator', 
+                                                validators=[DataRequired(message="Deskripsi karakter tidak boleh kosong.")],
+                                                description='Contoh: "pria, usia 20-an, tegas, suka humor". AI akan meniru karakter ini saat membalas.')
     is_active = BooleanField('Aktifkan AI Auto-Responder', description='Centang untuk mengaktifkan AI agar memproses komentar secara otomatis.')
     daily_run_count = IntegerField('Jumlah Jalan Per Hari', 
-                                   validators=[DataRequired(), NumberRange(min=1, max=3, message='Jumlah jalan per hari harus antara 1 dan 3.')], # BARU: Validasi NumberRange
-                                   description='Berapa kali AI akan memeriksa dan membalas komentar dalam sehari.')
+                                   validators=[Optional(), NumberRange(min=0, max=3, message='Jumlah jalan per hari harus antara 0 dan 3.')],
+                                   description='Berapa kali AI akan memeriksa dan membalas komentar dalam sehari (isi 0 untuk menonaktifkan).')
     submit = SubmitField('Simpan Pengaturan AI')
 
     def validate_tiktok_username(self, tiktok_username):
