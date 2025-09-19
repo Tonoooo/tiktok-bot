@@ -406,7 +406,7 @@ def dashboard():
 @app.route('/onboarding/ai_settings', methods=['GET', 'POST'])
 def onboarding_ai_settings(): # Rute khusus untuk onboarding AI Settings
     form = AiSettingsForm()
-    user = User.query.get(current_user.id)
+    user = User.query.get(session.get('_user_id'))
 
     if not user:
         flash("User tidak ditemukan.", "danger")
@@ -441,7 +441,7 @@ def onboarding_ai_settings(): # Rute khusus untuk onboarding AI Settings
 
 @app.route('/onboarding/tiktok_connect')
 def onboarding_tiktok_connect(): # Rute khusus untuk onboarding TikTok Connect
-    user = User.query.get(current_user.id)
+    user = User.query.get(session.get('_user_id'))
     if not user:
         flash("User tidak ditemukan.", "danger")
         return redirect(url_for('welcome'))
@@ -490,7 +490,7 @@ def onboarding_trial_cta():
 @app.route('/tiktok_connect') # Menggunakan rute ini untuk pengguna berlangganan
 # @login_required
 def tiktok_connect():
-    user = User.query.get(current_user.id)
+    user = User.query.get(session.get('_user_id'))
     if not user:
         flash("User tidak ditemukan.", "danger")
         return redirect(url_for('dashboard'))
@@ -514,7 +514,7 @@ def tiktok_connect():
 @app.route('/ai_settings', methods=['GET', 'POST'])
 def ai_settings():
     form = AiSettingsForm()
-    user = User.query.get(current_user.id)
+    user = User.query.get(session.get('_user_id'))
 
     if not user:
         flash("User tidak ditemukan.", "danger")
@@ -557,7 +557,7 @@ def ai_settings():
 @app.route('/tiktok_connect_legacy') # Rute lama untuk non-onboarding user
 # @login_required
 def tiktok_connect_legacy(): # Rute ini bisa dihapus atau digunakan untuk mode normal jika perlu
-    user = User.query.get(current_user.id)
+    user = User.query.get(session.get('_user_id'))
     if not user:
         flash("User tidak ditemukan.", "danger")
         return redirect(url_for('dashboard'))
@@ -678,7 +678,7 @@ def payment():
 # api untuk mengosongkan cookies tiktok
 @app.route('/api/disconnect_tiktok', methods=['POST'])
 def api_disconnect_tiktok():
-    user = User.query.get(current_user.id)
+    user = User.query.get(session.get('_user_id'))
     if not user:
         return jsonify({"message": "User tidak ditemukan."}), 404
     
@@ -694,7 +694,7 @@ def api_disconnect_tiktok():
 @app.route('/api/trigger_qr_login', methods=['POST'])
 # @login_required
 def api_trigger_qr_login():
-    user = User.query.get(current_user.id)
+    user = User.query.get(session.get('_user_id'))
     if not user:
         return jsonify({"message": "User tidak ditemukan."}), 404
     
@@ -727,7 +727,7 @@ def api_trigger_qr_login():
 @app.route('/api/user_settings_for_ui', methods=['GET'])
 # @login_required
 def api_get_user_settings_for_ui():
-    user = User.query.get(current_user.id)
+    user = User.query.get(session.get('_user_id'))
     if not user:
         return jsonify({"message": "User tidak ditemukan."}), 404
     
