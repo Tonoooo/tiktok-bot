@@ -250,16 +250,28 @@ def combined_middleware():
     print(f"[{datetime.now()}] DEBUG Middleware: Endpoint={request.endpoint}, Is Authenticated={current_user.is_authenticated}, Session User ID={session.get('_user_id')}, Current User ID={current_user.id if current_user.is_authenticated else 'N/A'}")
     print(f"[{datetime.now()}] DEBUG Middleware: Current session in middleware: {session}")
     
+    # PERIKSA LANGSUNG DARI SESI, BUKAN current_user
+    user_is_logged_in = '_user_id' in session
+
     # Daftar endpoint yang diizinkan untuk diakses oleh pengguna yang belum login
     allowed_endpoints_unauthenticated = ['welcome', 'register', 'login', 'static', 'serve_qr_code']
     
-    if not current_user.is_authenticated:
+    if not user_is_logged_in:
         if request.endpoint in allowed_endpoints_unauthenticated:
             return None # Izinkan akses
         # Jika mencoba akses halaman lain, arahkan ke welcome
         flash("Harap masuk untuk mengakses halaman ini.", "warning")
         return redirect(url_for('welcome'))
 
+    # Jika sudah sampai sini, berarti _user_id ADA di sesi.
+    # Kita bisa dengan aman memuat objek user untuk logika selanjutnya.
+    user = load_user(session.get('_user_id'))
+    if not user:
+        # Jika user tidak ditemukan di DB (misal terhapus), hapus sesi & logout
+        session.clear()
+        flash("Sesi Anda tidak valid, silakan masuk kembali.", "danger")
+        return redirect(url_for('login'))
+    
     # Jika sudah sampai sini, berarti current_user.is_authenticated adalah True
     user = current_user
     
