@@ -349,13 +349,21 @@ def login():
     if form.validate_on_submit():
         user = User.query.filter_by(email=form.email.data).first()
         if user and check_password_hash(user.password_hash, form.password.data):
+            # === START PERUBAHAN MANUAL ===
+            # Secara manual masukkan ID pengguna ke dalam sesi.
+            # Ini adalah inti dari apa yang seharusnya dilakukan login_user().
+            session['_user_id'] = user.id
+            session['_fresh'] = True
+            session.modified = True
+            # === AKHIR PERUBAHAN MANUAL ===
+
+            # Kita tetap memanggil login_user untuk menangani fitur "remember me"
             login_user(user, remember=form.remember_me.data)
-            
-            session.modified = True 
             
             flash('Berhasil masuk!', 'success')
             print(f"[{datetime.now()}] DEBUG Login Route: login_user called for user {user.id}.")
-            print(f"[{datetime.now()}] DEBUG Login Route: Session after login_user: {session}")
+            print(f"[{datetime.now()}] DEBUG Login Route: Session after manual set: {session}") # Ubah sedikit teks log
+            
             next_page = request.args.get('next')
             if user.is_subscribed or user.is_admin:
                 return redirect(next_page or url_for('dashboard'))
