@@ -7,7 +7,7 @@
     <h1 class="text-3xl font-bold text-gray-900 mb-6">Pengaturan AI Auto-Responder</h1>
 
     <div class="bg-white p-6 rounded-lg shadow-md max-w-2xl mx-auto">
-        <form action="{{ url_for('ai_settings') }}" method="POST" class="space-y-6">
+        <form action="{{ url_for('onboarding_ai_settings') if onboarding_mode else url_for('ai_settings') }}" method="POST" class="space-y-6">
             {{ form.hidden_tag() }} <!-- CSRF token -->
 
             <div>
