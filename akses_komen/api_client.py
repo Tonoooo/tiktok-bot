@@ -16,24 +16,30 @@ class APIClient:
         
     def _make_request(self, method, endpoint, data=None, params: Optional[Dict] = None, json_data: Optional[Dict] = None, files: Optional[Dict] = None) -> Dict:
         url = f"{self.base_url}{endpoint}"
-        headers = {"X-API-Key": self.api_key}
+        # Inisialisasi 'response' ke None di sini
+        response = None
         
+        # Untuk file uploads, kita tidak set Content-Type secara manual
+        headers = {"X-API-Key": self.api_key}
+        if not files:
+            headers['Content-Type'] = 'application/json'
+
         try:
             if method == 'GET':
-                response = requests.get(url, headers=self.headers, timeout=30)
+                response = requests.get(url, headers=headers, params=params, timeout=30)
             elif method == 'POST':
-                response = requests.post(url, headers=self.headers, json=data, timeout=30)
+                # 'data' untuk form-data, 'json_data' untuk application/json
+                response = requests.post(url, headers=headers, data=data, json=json_data, files=files, timeout=30)
             elif method == 'PUT':
-                response = requests.put(url, headers=self.headers, json=data, timeout=30)
+                response = requests.put(url, headers=headers, json=data, timeout=30)
             else:
                 raise ValueError("Metode HTTP tidak didukung.")
             
-            response.raise_for_status() # Raise HTTPError for bad responses (4xx or 5xx)
+            response.raise_for_status()
             return response.json()
-        except requests.exceptions.Timeout:
-            raise Exception(f"Permintaan ke {url} timeout setelah 30 detik.")
         except requests.exceptions.RequestException as e:
             error_message = f"ERROR APIClient: Gagal terhubung ke VPS API atau ada masalah respons: {e}"
+            # Cek 'response' di sini
             if response is not None:
                 try:
                     error_data = response.json()
@@ -41,6 +47,7 @@ class APIClient:
                 except json.JSONDecodeError:
                     error_message += f" - Teks Respons: {response.text}"
             raise Exception(error_message)
+
         
         
     def get_user_settings(self, user_id: int):

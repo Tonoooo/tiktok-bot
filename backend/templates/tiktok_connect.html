@@ -212,6 +212,7 @@
                 });
                 const data = await response.json();
                 
+                // PINDAHKAN LOGIKA INI KE DALAM 'TRY'
                 if (response.ok && data.cookies_json && JSON.parse(data.cookies_json).length > 0 && data.qr_process_active === false) {
                     clearInterval(qrPollingImageInterval);
                     clearInterval(qrPollingLoginInterval);
@@ -227,20 +228,11 @@
                     alert('Login TikTok gagal. Silakan coba lagi.');
                 } else {
                     console.log('Menunggu login TikTok...');
-                    // Tidak ada lagi pengecekan kadaluarsa di sini
                 }
             } catch (error) {
                 console.error('Error saat polling status login:', error);
             }
         }, 5000);
-
-        if (response.ok && data.cookies_json && JSON.parse(data.cookies_json).length > 0 && data.qr_process_active === false) {
-            clearInterval(qrPollingImageInterval);
-            clearInterval(qrPollingLoginInterval);
-            alert('Login TikTok berhasil! Halaman akan disegarkan.');
-            window.location.reload(); // Ini akan memicu middleware untuk mengarahkan ke tahap berikutnya (TRIAL_CTA)
-        } 
-
     }
 
     async function downloadQrCode() {
