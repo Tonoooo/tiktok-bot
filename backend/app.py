@@ -273,7 +273,7 @@ def combined_middleware():
         return redirect(url_for('login'))
     
     # Jika sudah sampai sini, berarti current_user.is_authenticated adalah True
-    user = current_user
+    # user = current_user
     
     # Lewati untuk endpoint logout dan payment
     if request.endpoint in ['logout', 'payment']:
