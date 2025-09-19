@@ -23,11 +23,12 @@ class User(db.Model, UserMixin): # Tambahkan UserMixin di sini
     is_active = db.Column(db.Boolean, default=True)
     daily_run_count = db.Column(db.Integer, default=1)
     
-    last_comment_run_at = db.Column(db.DateTime, nullable=True)
+    last_run_at = db.Column(db.DateTime, nullable=True)
     comment_runs_today = db.Column(db.Integer, default=0, nullable=False)
     
     last_comment_run_at = db.Column(db.DateTime, nullable=True)
-    cookies_json = db.Column(db.Text, nullable=True) # Akan menyimpan cookies TikTok
+    cookies_json = db.Column(db.Text, nullable=True)
+    
     qr_process_active = db.Column(db.Boolean, default=False, nullable=False)
     qr_generated_at = db.Column(db.DateTime, nullable=True)
     
