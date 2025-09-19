@@ -15,6 +15,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 import sys
 from rq import Queue
 import redis
+from flask_session import Session
 
 from backend.tasks import enqueue_qr_login_task,  enqueue_comment_processing_task # Import tugas RQ
 from backend.forms import RegistrationForm, LoginForm, AiSettingsForm
@@ -60,13 +61,21 @@ db.init_app(app)
 
 app.jinja_env.globals['datetime'] = datetime
 
+# --- Konfigurasi Flask-Session (BARU) ---
+app.config["SESSION_TYPE"] = "redis"
+app.config["SESSION_PERMANENT"] = True # Sesinya bersifat permanen (misal, untuk "remember me")
+app.config["SESSION_USE_SIGNER"] = True # Menandatangani ID sesi untuk mencegah tampering
+app.config["SESSION_KEY_PREFIX"] = "sitono_session:" # Prefix untuk kunci Redis
+app.config["SESSION_REDIS"] = redis.from_url(os.getenv('REDIS_URL', 'redis://localhost:6379/0')) # Gunakan koneksi Redis yang sama
+Session(app) # Inisialisasi Flask-Session
+
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login' 
 login_manager.login_message = "Harap masuk untuk mengakses halaman ini."
 login_manager.login_message_category = "warning"
 
-login_manager.session_protection = None
+# login_manager.session_protection = None
 
 @login_manager.user_loader
 def load_user(user_id):
