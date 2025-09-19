@@ -336,6 +336,7 @@ def register():
         
     return render_template('register.html', form=form)
 
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     print(f"[{datetime.now()}] DEBUG Login Route: current_user.is_authenticated={current_user.is_authenticated}")
@@ -349,6 +350,9 @@ def login():
         user = User.query.filter_by(email=form.email.data).first()
         if user and check_password_hash(user.password_hash, form.password.data):
             login_user(user, remember=form.remember_me.data)
+            
+            session.modified = True 
+            
             flash('Berhasil masuk!', 'success')
             print(f"[{datetime.now()}] DEBUG Login Route: login_user called for user {user.id}.")
             print(f"[{datetime.now()}] DEBUG Login Route: Session after login_user: {session}")
@@ -356,7 +360,7 @@ def login():
             if user.is_subscribed or user.is_admin:
                 return redirect(next_page or url_for('dashboard'))
             else:
-                return redirect(next_page or url_for('onboarding_ai_settings')) # Arahkan ke titik awal onboarding
+                return redirect(next_page or url_for('onboarding_ai_settings'))
         else:
             flash('Login gagal. Periksa email dan kata sandi Anda.', 'danger')
     return render_template('login.html', form=form)
