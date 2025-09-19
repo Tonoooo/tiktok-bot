@@ -104,93 +104,170 @@ QR_CODE_TEMP_DIR_SERVER = os.path.join(project_root, 'qr_codes_temp_server')
 if not os.path.exists(QR_CODE_TEMP_DIR_SERVER):
     os.makedirs(QR_CODE_TEMP_DIR_SERVER)
 
-@app.before_request
-def api_key_auth():
-    api_key_endpoints = [
-        'get_user_settings_api', 
-        'update_user_cookies_api',
-        'update_user_last_run_api',
-        'get_processed_video_by_url_api',
-        'save_processed_video_api',
-        'upload_qr_image_api', 
-        'get_active_users_for_bot',
-        'save_processed_comment_api', 
-        'api_update_user_qr_status',
-        'api_update_user_cookies_status',
-        'api_upload_qr_image',
-        'api_update_user_comment_run_status',
-        'api_onboarding_trial_bot_completed'
-    ]
+# @app.before_request
+# def api_key_auth():
+#     api_key_endpoints = [
+#         'get_user_settings_api', 
+#         'update_user_cookies_api',
+#         'update_user_last_run_api',
+#         'get_processed_video_by_url_api',
+#         'save_processed_video_api',
+#         'upload_qr_image_api', 
+#         'get_active_users_for_bot',
+#         'save_processed_comment_api', 
+#         'api_update_user_qr_status',
+#         'api_update_user_cookies_status',
+#         'api_upload_qr_image',
+#         'api_update_user_comment_run_status',
+#         'api_onboarding_trial_bot_completed'
+#     ]
     
-    if request.endpoint == 'serve_qr_code':
-        return
+#     if request.endpoint == 'serve_qr_code':
+#         return
 
-    if request.endpoint in api_key_endpoints:
-        provided_api_key = request.headers.get('X-API-Key')
-        if not provided_api_key or provided_api_key != API_BOT_KEY:
-            return jsonify({"message": "Unauthorized: Invalid API Key."}), 401
+#     if request.endpoint in api_key_endpoints:
+#         provided_api_key = request.headers.get('X-API-Key')
+#         if not provided_api_key or provided_api_key != API_BOT_KEY:
+#             return jsonify({"message": "Unauthorized: Invalid API Key."}), 401
 
 # ===============================================
 # Middleware Pengalihan Onboarding (BARU)
 # ===============================================
+# @app.before_request
+# def onboarding_redirect_middleware():
+#     print(f"[{datetime.now()}] DEBUG Middleware: Endpoint={request.endpoint}, Is Authenticated={current_user.is_authenticated}, Session User ID={session.get('_user_id')}, Current User ID={current_user.id if current_user.is_authenticated else 'N/A'}")
+#     print(f"[{datetime.now()}] DEBUG Middleware: Current session in middleware: {session}")
+#     # Lewati jika tidak ada user yang login atau sedang mengakses endpoint yang diizinkan
+    
+#     user_id_from_session = session.get('_user_id')
+#     user_from_db = None
+#     if user_id_from_session:
+#         with app.app_context(): # Pastikan kita di app context untuk query DB
+#             user_from_db = User.query.get(int(user_id_from_session))
+#         print(f"[{datetime.now()}] DEBUG Middleware: User from DB (via session ID): {user_from_db.id if user_from_db else 'None'}")
+    
+#     if not current_user.is_authenticated:
+#         print(f"[{datetime.now()}] DEBUG Middleware: Endpoint={request.endpoint}, Is Authenticated={current_user.is_authenticated}, User ID={current_user.id if current_user.is_authenticated else 'N/A'}") # TAMBAH USER ID
+#         print(f"[{datetime.now()}] DEBUG Middleware: Current session in middleware: {session}") # BARU: Periksa sesi di middleware
+#         # Izinkan akses ke welcome, register, login, static files
+#         if request.endpoint in ['welcome', 'register', 'login', 'static', 'serve_qr_code']:
+#             return None
+#         print(f"[{datetime.now()}] DEBUG Middleware: User from DB (via session ID): {user_from_db.id if user_from_db else 'None'}")
+#         return redirect(url_for('welcome')) # Arahkan ke welcome jika belum login
+    
+#     user = current_user if current_user.is_authenticated else user_from_db
+    
+#     # Jika setelah upaya ini user masih None, berarti ada masalah serius
+#     if not user:
+#         print(f"[{datetime.now()}] DEBUG Middleware: Critical error - user object is None after all attempts.")
+#         if request.endpoint in ['welcome', 'register', 'login', 'static', 'serve_qr_code']:
+#             return None
+#         return redirect(url_for('welcome')) # Fallback jika semua gagal
+    
+#     # Lewati untuk endpoint API bot worker (sudah ditangani oleh api_key_auth)
+#     # Dan endpoint API UI untuk ambil settings (akan dicek di rute masing-masing)
+#     if request.endpoint and request.endpoint.startswith('api_'):
+#         return None
+
+#     # Lewati untuk endpoint logout dan payment (payment akan dihandle secara terpisah)
+#     if request.endpoint in ['logout', 'payment']:
+#         return None
+
+    
+
+#     # # Jika sudah berlangganan atau admin, arahkan ke dashboard normal
+#     # if user.is_subscribed or user.is_admin:
+#     #     if request.endpoint in ['dashboard', 'ai_settings', 'tiktok_connect', 'ai_activity', 'comment_details']: # Izinkan akses ke semua rute normal
+#     #         return None # Sudah di dashboard
+#     #     # Jika sedang mengakses halaman onboarding, arahkan ke dashboard
+#     #     if request.endpoint in ['onboarding_ai_settings', 'onboarding_tiktok_connect', 'onboarding_trial_cta']:
+#     #         return redirect(url_for('dashboard'))
+#     #     return None # Biarkan mengakses halaman yang diminta (selain onboarding)
+
+#     # =========================================================================
+#     # Logika Pengalihan Onboarding untuk Pengguna yang Belum Berlangganan
+#     # =========================================================================
+    
+#     current_onboarding_route = request.endpoint
+
+#     # Definisikan urutan alur onboarding
+#     onboarding_flow = {
+#         'REGISTERED': 'onboarding_ai_settings',
+#         'AI_SETTINGS_PENDING': 'onboarding_ai_settings',
+#         'TIKTOK_CONNECT_PENDING': 'onboarding_tiktok_connect',
+#         'TRIAL_CTA': 'onboarding_trial_cta',
+#         'TRIAL_RUNNING': 'onboarding_trial_cta',
+#         'TRIAL_COMPLETED': 'onboarding_trial_cta',
+#         'SUBSCRIBED': 'dashboard'
+#     }
+    
+#     if user.is_subscribed or user.is_admin:
+#         if request.endpoint in ['onboarding_ai_settings', 'onboarding_tiktok_connect', 'onboarding_trial_cta']:
+#             return redirect(url_for('dashboard'))
+#         return None # Biarkan mengakses rute normal lainnya
+
+#     expected_route_for_stage = onboarding_flow.get(user.onboarding_stage)
+
+#     # Jika user mencoba mengakses rute yang bukan bagian dari flow onboarding
+#     if current_onboarding_route not in onboarding_flow.values() and current_onboarding_route not in ['dashboard', 'welcome']:
+#         flash('Harap lengkapi alur onboarding Anda.', 'info')
+#         return redirect(url_for(expected_route_for_stage))
+
+#     # Jika user tidak berada di halaman yang diharapkan sesuai tahap onboarding
+#     if expected_route_for_stage and current_onboarding_route != expected_route_for_stage:
+#         flash('Harap lengkapi alur onboarding Anda.', 'info')
+#         return redirect(url_for(expected_route_for_stage))
+        
+#     return None
+
+# ===============================================
+# GABUNGAN MIDDLEWARE
+# ===============================================
 @app.before_request
-def onboarding_redirect_middleware():
-    print(f"[{datetime.now()}] DEBUG Middleware: Endpoint={request.endpoint}, Is Authenticated={current_user.is_authenticated}, Session User ID={session.get('_user_id')}, Current User ID={current_user.id if current_user.is_authenticated else 'N/A'}")
-    print(f"[{datetime.now()}] DEBUG Middleware: Current session in middleware: {session}")
-    # Lewati jika tidak ada user yang login atau sedang mengakses endpoint yang diizinkan
+def combined_middleware():
+    # --- Bagian 1: Logika API Key Authentication ---
+    api_key_endpoints = [
+        'get_user_settings_api', 'update_user_cookies_api', 'update_user_last_run_api',
+        'get_processed_video_by_url_api', 'save_processed_video_api', 'upload_qr_image_api', 
+        'get_active_users_for_bot', 'save_processed_comment_api', 'api_update_user_qr_status',
+        'api_update_user_cookies_status', 'api_upload_qr_image', 'api_update_user_comment_run_status',
+        'api_onboarding_trial_bot_completed'
+    ]
     
-    user_id_from_session = session.get('_user_id')
-    user_from_db = None
-    if user_id_from_session:
-        with app.app_context(): # Pastikan kita di app context untuk query DB
-            user_from_db = User.query.get(int(user_id_from_session))
-        print(f"[{datetime.now()}] DEBUG Middleware: User from DB (via session ID): {user_from_db.id if user_from_db else 'None'}")
+    # Lewati pemeriksaan API Key untuk endpoint serve_qr_code
+    if request.endpoint == 'serve_qr_code':
+        pass # Lanjutkan ke logika selanjutnya
     
-    if not current_user.is_authenticated:
-        print(f"[{datetime.now()}] DEBUG Middleware: Endpoint={request.endpoint}, Is Authenticated={current_user.is_authenticated}, User ID={current_user.id if current_user.is_authenticated else 'N/A'}") # TAMBAH USER ID
-        print(f"[{datetime.now()}] DEBUG Middleware: Current session in middleware: {session}") # BARU: Periksa sesi di middleware
-        # Izinkan akses ke welcome, register, login, static files
-        if request.endpoint in ['welcome', 'register', 'login', 'static', 'serve_qr_code']:
-            return None
-        print(f"[{datetime.now()}] DEBUG Middleware: User from DB (via session ID): {user_from_db.id if user_from_db else 'None'}")
-        return redirect(url_for('welcome')) # Arahkan ke welcome jika belum login
-    
-    user = current_user if current_user.is_authenticated else user_from_db
-    
-    # Jika setelah upaya ini user masih None, berarti ada masalah serius
-    if not user:
-        print(f"[{datetime.now()}] DEBUG Middleware: Critical error - user object is None after all attempts.")
-        if request.endpoint in ['welcome', 'register', 'login', 'static', 'serve_qr_code']:
-            return None
-        return redirect(url_for('welcome')) # Fallback jika semua gagal
-    
-    # Lewati untuk endpoint API bot worker (sudah ditangani oleh api_key_auth)
-    # Dan endpoint API UI untuk ambil settings (akan dicek di rute masing-masing)
-    if request.endpoint and request.endpoint.startswith('api_'):
+    # Jika endpoint adalah API untuk bot, lakukan pemeriksaan API Key
+    elif request.endpoint in api_key_endpoints:
+        provided_api_key = request.headers.get('X-API-Key')
+        if not provided_api_key or provided_api_key != API_BOT_KEY:
+            return jsonify({"message": "Unauthorized: Invalid API Key."}), 401
+        # Jika API Key valid, jangan lanjutkan ke middleware onboarding, langsung proses request
         return None
 
-    # Lewati untuk endpoint logout dan payment (payment akan dihandle secara terpisah)
+    # --- Bagian 2: Logika Pengalihan Onboarding ---
+    print(f"[{datetime.now()}] DEBUG Middleware: Endpoint={request.endpoint}, Is Authenticated={current_user.is_authenticated}, Session User ID={session.get('_user_id')}, Current User ID={current_user.id if current_user.is_authenticated else 'N/A'}")
+    print(f"[{datetime.now()}] DEBUG Middleware: Current session in middleware: {session}")
+    
+    # Daftar endpoint yang diizinkan untuk diakses oleh pengguna yang belum login
+    allowed_endpoints_unauthenticated = ['welcome', 'register', 'login', 'static', 'serve_qr_code']
+    
+    if not current_user.is_authenticated:
+        if request.endpoint in allowed_endpoints_unauthenticated:
+            return None # Izinkan akses
+        # Jika mencoba akses halaman lain, arahkan ke welcome
+        flash("Harap masuk untuk mengakses halaman ini.", "warning")
+        return redirect(url_for('welcome'))
+
+    # Jika sudah sampai sini, berarti current_user.is_authenticated adalah True
+    user = current_user
+    
+    # Lewati untuk endpoint logout dan payment
     if request.endpoint in ['logout', 'payment']:
         return None
 
-    
-
-    # # Jika sudah berlangganan atau admin, arahkan ke dashboard normal
-    # if user.is_subscribed or user.is_admin:
-    #     if request.endpoint in ['dashboard', 'ai_settings', 'tiktok_connect', 'ai_activity', 'comment_details']: # Izinkan akses ke semua rute normal
-    #         return None # Sudah di dashboard
-    #     # Jika sedang mengakses halaman onboarding, arahkan ke dashboard
-    #     if request.endpoint in ['onboarding_ai_settings', 'onboarding_tiktok_connect', 'onboarding_trial_cta']:
-    #         return redirect(url_for('dashboard'))
-    #     return None # Biarkan mengakses halaman yang diminta (selain onboarding)
-
-    # =========================================================================
-    # Logika Pengalihan Onboarding untuk Pengguna yang Belum Berlangganan
-    # =========================================================================
-    
-    current_onboarding_route = request.endpoint
-
-    # Definisikan urutan alur onboarding
+    # Definisikan alur onboarding
     onboarding_flow = {
         'REGISTERED': 'onboarding_ai_settings',
         'AI_SETTINGS_PENDING': 'onboarding_ai_settings',
@@ -201,24 +278,24 @@ def onboarding_redirect_middleware():
         'SUBSCRIBED': 'dashboard'
     }
     
+    # Jika sudah berlangganan atau admin, arahkan ke dashboard jika mereka mencoba akses halaman onboarding
     if user.is_subscribed or user.is_admin:
         if request.endpoint in ['onboarding_ai_settings', 'onboarding_tiktok_connect', 'onboarding_trial_cta']:
             return redirect(url_for('dashboard'))
-        return None # Biarkan mengakses rute normal lainnya
+        return None # Izinkan akses ke halaman normal lainnya (seperti dashboard, ai_settings, dll)
 
+    # Logika pengalihan untuk pengguna yang sedang onboarding
     expected_route_for_stage = onboarding_flow.get(user.onboarding_stage)
 
-    # Jika user mencoba mengakses rute yang bukan bagian dari flow onboarding
-    if current_onboarding_route not in onboarding_flow.values() and current_onboarding_route not in ['dashboard', 'welcome']:
-        flash('Harap lengkapi alur onboarding Anda.', 'info')
-        return redirect(url_for(expected_route_for_stage))
-
-    # Jika user tidak berada di halaman yang diharapkan sesuai tahap onboarding
-    if expected_route_for_stage and current_onboarding_route != expected_route_for_stage:
-        flash('Harap lengkapi alur onboarding Anda.', 'info')
+    # Jika pengguna mencoba mengakses halaman yang tidak sesuai dengan tahap onboarding-nya
+    if expected_route_for_stage and request.endpoint != expected_route_for_stage:
+        # Izinkan akses ke API UI (karena dibutuhkan oleh halaman onboarding)
+        if request.endpoint.startswith('api_'):
+            return None
+        flash('Harap lengkapi alur onboarding Anda terlebih dahulu.', 'info')
         return redirect(url_for(expected_route_for_stage))
         
-    return None
+    return None # Jika semua kondisi di atas tidak terpenuhi, izinkan akses
 
 # ===============================================
 # ROUTE WEBSITE (UI)
