@@ -386,14 +386,13 @@ def login():
     return render_template('login.html', form=form)
 
 @app.route('/logout')
-@login_required 
+# @login_required 
 def logout():
     logout_user()
     flash('Anda telah keluar.', 'info')
     return redirect(url_for('welcome'))
 
 @app.route('/dashboard')
-@login_required
 def dashboard():
     user = current_user # Pastikan mengambil user dari current_user
     total_videos = ProcessedVideo.query.filter_by(user_id=user.id).count()
@@ -405,7 +404,6 @@ def dashboard():
 # ===============================================
 
 @app.route('/onboarding/ai_settings', methods=['GET', 'POST'])
-@login_required
 def onboarding_ai_settings(): # Rute khusus untuk onboarding AI Settings
     form = AiSettingsForm()
     user = User.query.get(current_user.id)
@@ -442,7 +440,6 @@ def onboarding_ai_settings(): # Rute khusus untuk onboarding AI Settings
     return render_template('ai_settings.html', form=form, user_settings=user, onboarding_mode=True)
 
 @app.route('/onboarding/tiktok_connect')
-@login_required
 def onboarding_tiktok_connect(): # Rute khusus untuk onboarding TikTok Connect
     user = User.query.get(current_user.id)
     if not user:
@@ -470,7 +467,6 @@ def onboarding_tiktok_connect(): # Rute khusus untuk onboarding TikTok Connect
                             onboarding_mode=True)
 
 @app.route('/onboarding/trial_cta', methods=['GET', 'POST']) # BARU: Halaman CTA Trial
-@login_required
 def onboarding_trial_cta():
     user = current_user
     if not user:
@@ -492,7 +488,7 @@ def onboarding_trial_cta():
 # ===============================================
 
 @app.route('/tiktok_connect') # Menggunakan rute ini untuk pengguna berlangganan
-@login_required
+# @login_required
 def tiktok_connect():
     user = User.query.get(current_user.id)
     if not user:
@@ -516,7 +512,6 @@ def tiktok_connect():
 
 
 @app.route('/ai_settings', methods=['GET', 'POST'])
-@login_required
 def ai_settings():
     form = AiSettingsForm()
     user = User.query.get(current_user.id)
@@ -560,7 +555,7 @@ def ai_settings():
 
 
 @app.route('/tiktok_connect_legacy') # Rute lama untuk non-onboarding user
-@login_required
+# @login_required
 def tiktok_connect_legacy(): # Rute ini bisa dihapus atau digunakan untuk mode normal jika perlu
     user = User.query.get(current_user.id)
     if not user:
@@ -587,7 +582,6 @@ def tiktok_connect_legacy(): # Rute ini bisa dihapus atau digunakan untuk mode n
                             onboarding_mode=False) # Mode normal
 
 @app.route('/ai_activity')
-@login_required
 def ai_activity():
     user_videos = ProcessedVideo.query.filter_by(user_id=current_user.id).order_by(ProcessedVideo.processed_at.desc()).all()
     
@@ -610,7 +604,7 @@ def ai_activity():
 
 # BARU: Rute untuk halaman "Detail Balasan Komentar" per Video
 @app.route('/ai_activity/<int:video_id>/comments')
-@login_required
+# @login_required
 def comment_details(video_id):
     video = ProcessedVideo.query.get_or_404(video_id)
     
@@ -639,7 +633,7 @@ def comment_details(video_id):
 # Endpoint untuk mengambil daftar video yang diproses untuk user (melalui UI, otentikasi Flask-Login)
 # Ini sudah ada di bawah, tapi kita bisa pakai rute /ai_activity
 # @app.route('/api/processed_videos/<int:user_id>', methods=['GET'])
-# @login_required
+# # @login_required
 # def get_processed_videos_for_ui(user_id):
 #     if current_user.id != user_id:
 #         return jsonify({"message": "Unauthorized access."}), 403
@@ -648,7 +642,7 @@ def comment_details(video_id):
 # Endpoint untuk mendapatkan detail komentar untuk video tertentu (melalui UI, otentikasi Flask-Login)
 # Ini juga bisa diganti dengan rute comment_details
 # @app.route('/api/processed_videos/<int:video_id>/comments_for_ui', methods=['GET'])
-# @login_required
+# # @login_required
 # def get_comments_for_video_ui(video_id):
 #     video = ProcessedVideo.query.get_or_404(video_id)
 #     if video.user_id != current_user.id:
@@ -668,7 +662,6 @@ def comment_details(video_id):
 #     return jsonify({"comments": comments_data, "video_url": video.video_url}), 200
 
 @app.route('/payment')
-@login_required
 def payment():
     user = current_user # Mengambil user dari current_user
     is_subscribed = user.is_subscribed # Mengambil status langganan dari user
@@ -684,7 +677,6 @@ def payment():
     
 # api untuk mengosongkan cookies tiktok
 @app.route('/api/disconnect_tiktok', methods=['POST'])
-@login_required
 def api_disconnect_tiktok():
     user = User.query.get(current_user.id)
     if not user:
@@ -700,7 +692,7 @@ def api_disconnect_tiktok():
         return jsonify({"message": f"Gagal memutuskan koneksi TikTok: {e}"}), 500
 
 @app.route('/api/trigger_qr_login', methods=['POST'])
-@login_required
+# @login_required
 def api_trigger_qr_login():
     user = User.query.get(current_user.id)
     if not user:
@@ -733,7 +725,7 @@ def api_trigger_qr_login():
 
 # BARU: API Endpoint untuk UI mengambil pengaturan user, termasuk status cookies
 @app.route('/api/user_settings_for_ui', methods=['GET'])
-@login_required
+# @login_required
 def api_get_user_settings_for_ui():
     user = User.query.get(current_user.id)
     if not user:
@@ -874,7 +866,7 @@ def api_onboarding_trial_bot_completed(user_id):
         return jsonify({"message": f"Error updating onboarding stage: {e}"}), 500
 
 @app.route('/api/onboarding/trigger_trial_bot', methods=['POST'])
-@login_required
+# @login_required
 def api_onboarding_trigger_trial_bot():
     user = current_user
     if not user:
@@ -907,7 +899,7 @@ def api_onboarding_trigger_trial_bot():
 
 # BARU: API Endpoint untuk simulasi langganan
 @app.route('/api/onboarding/subscribe', methods=['POST'])
-@login_required
+# @login_required
 def api_onboarding_subscribe():
     user = current_user
     if not user:
@@ -934,7 +926,7 @@ def api_onboarding_subscribe():
 
 # Endpoint untuk pengaturan creator (melalui UI, otentikasi Flask-Login)
 @app.route('/api/creator_settings/<int:user_id>', methods=['GET', 'POST'])
-@login_required 
+# @login_required 
 def handle_creator_settings(user_id):
     if current_user.id != user_id:
         return jsonify({"message": "Unauthorized access."}), 403
@@ -987,7 +979,7 @@ def handle_creator_settings(user_id):
 
 # Endpoint untuk daftar video yang diproses (melalui UI, otentikasi Flask-Login)
 @app.route('/api/processed_videos/<int:user_id>', methods=['GET'])
-@login_required
+# @login_required
 def get_processed_videos(user_id):
     if current_user.id != user_id:
         return jsonify({"message": "Unauthorized access."}), 403
@@ -1017,7 +1009,7 @@ def get_processed_videos(user_id):
 # Bot worker lokal akan mengambil tugas ini, bukan Flask langsung menjalankannya
 # Dihapus karena bot tidak lagi dipicu langsung dari UI Flask ini
 # @app.route('/api/run_bot/<int:user_id>', methods=['POST'])
-# @login_required 
+# # @login_required 
 # def trigger_bot_run(user_id):
 #     if current_user.id != user_id:
 #         return jsonify({"message": "Unauthorized: You can only trigger the bot for your own user ID."}), 403
@@ -1038,7 +1030,7 @@ def get_processed_videos(user_id):
 # Dihapus karena QR login akan dijalankan oleh bot worker lokal, bukan Flask app ini
 # qr_login_tasks = {}
 # @app.route('/api/start_tiktok_qr_login/<int:user_id>', methods=['POST'])
-# @login_required
+# # @login_required
 # def start_tiktok_qr_login(user_id):
 #     if current_user.id != user_id:
 #         return jsonify({"message": "Unauthorized access."}), 403
@@ -1062,7 +1054,7 @@ def get_processed_videos(user_id):
 
 # Dihapus karena QR login akan dijalankan oleh bot worker lokal, bukan Flask app ini
 # @app.route('/api/get_tiktok_qr_status/<int:user_id>', methods=['GET'])
-# @login_required
+# # @login_required
 # def get_tiktok_qr_status(user_id):
 #     if current_user.id != user_id:
 #         return jsonify({"message": "Unauthorized access."}), 403
