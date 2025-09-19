@@ -248,11 +248,15 @@ def register():
                         has_used_free_trial=False) 
         db.session.add(new_user)
         db.session.commit()
+        
+        # Pesan flash sudah benar, menyuruh user untuk masuk
         flash('Akun Anda berhasil didaftarkan! Silakan masuk.', 'success')
-        login_user(new_user)
-        print(f"[{datetime.now()}] DEBUG Register Route: login_user called for user {new_user.id}.")
-        print(f"[{datetime.now()}] DEBUG Register Route: Session after login_user: {session}")
-        return redirect(url_for('onboarding_ai_settings')) 
+        
+        # HAPUS: login_user(new_user)
+        
+        # ARAHKAN KE HALAMAN LOGIN, BUKAN ONBOARDING
+        return redirect(url_for('login')) 
+        
     return render_template('register.html', form=form)
 
 @app.route('/login', methods=['GET', 'POST'])
