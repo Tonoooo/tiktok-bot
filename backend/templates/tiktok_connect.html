@@ -149,67 +149,51 @@
         }
     }
 
+    // +++ GANTI SELURUH FUNGSI startQrImagePolling() DENGAN INI +++
     function startQrImagePolling() {
-        let pollAttempts = 0;
-        const maxInitialQrLoadAttempts = 36; // Maksimal ~3 menit untuk QR pertama kali muncul
+        // Sembunyikan tombol, tampilkan area QR
+        qrTriggerArea.classList.add('hidden');
+        qrDisplayArea.classList.remove('hidden');
+        qrLoadingSpinner.classList.remove('hidden');
+        qrCodeImage.classList.add('hidden');
 
-        clearInterval(qrPollingImageInterval); 
+        const baseUrl = "{{ qr_image_url | safe }}";
 
-        qrPollingImageInterval = setInterval(async () => {
-            pollAttempts++;
-            // URL dasar gambar, tanpa parameter tambahan
-            const baseUrl = "{{ qr_image_url | safe }}";
-            
-            if (!baseUrl) {
-                console.log("Polling QR image: URL gambar QR kosong. Menunggu...");
-                if (qrSimulatedProgress < 90) simulateQrProgress();
-                return;
-            }
-            
-            // Buat URL baru dengan parameter cache-busting
+        // Fungsi ini akan dipanggil berulang kali
+        const pollForImage = () => {
+            // Buat URL unik setiap kali dengan menambahkan timestamp
             const imageUrlWithCacheBust = baseUrl + '?v=' + new Date().getTime();
 
-            try {
-                const img = new Image();
-                img.onload = () => {
-                    qrLoadingSpinner.classList.add('hidden');
-                    // Set sumber gambar di elemen <img> utama
-                    qrCodeImage.src = imageUrlWithCacheBust; 
-                    qrCodeImage.classList.remove('hidden');
-                    loadingText.innerText = 'QR Code siap discan!';
-                    loadingPercentage.innerText = '100%';
-                    console.log("QR Code berhasil dimuat dan di-refresh.");
-                    // Hentikan simulasi progress setelah gambar pertama muncul
-                    if (qrSimulatedProgress > 0) {
-                        qrSimulatedProgress = 0; // Reset untuk penggunaan selanjutnya
-                        clearInterval(qrPollingImageInterval); // Hentikan interval progress
-                        // Mulai interval baru yang hanya me-refresh gambar tanpa loading bar
-                        setInterval(() => {
-                            const refreshUrl = baseUrl + '?v=' + new Date().getTime();
-                            qrCodeImage.src = refreshUrl;
-                            console.log("Gambar QR diperbarui.");
-                        }, 10000); // Refresh gambar setiap 10 detik
-                    }
-                };
-                img.onerror = () => {
-                    console.log(`Polling QR image: QR code belum tersedia (Percobaan ${pollAttempts}).`);
-                    if (qrSimulatedProgress < 90) simulateQrProgress();
-                };
-                // Gunakan URL dengan cache-busting untuk memeriksa gambar
-                img.src = imageUrlWithCacheBust;
-            } catch (error) {
-                console.error("Error saat polling QR image:", error);
-                if (qrSimulatedProgress < 90) simulateQrProgress();
-            }
+            // Coba muat gambar baru
+            const img = new Image();
+            img.src = imageUrlWithCacheBust;
 
-            if (pollAttempts > maxInitialQrLoadAttempts && qrCodeImage.classList.contains('hidden')) {
-                console.error("Gagal memuat QR code setelah beberapa percobaan. Membatalkan polling gambar.");
-                clearInterval(qrPollingImageInterval);
-                loadingText.innerText = 'Gagal memuat QR Code. Coba Refresh QR.';
-                loadingPercentage.innerText = '';
-            }
+            img.onload = () => {
+                // Jika berhasil dimuat, tampilkan gambarnya
+                qrLoadingSpinner.classList.add('hidden');
+                qrCodeImage.src = imageUrlWithCacheBust;
+                qrCodeImage.classList.remove('hidden');
+                console.log("QR Code berhasil dimuat dan ditampilkan.");
+                // Hentikan polling setelah gambar pertama kali berhasil dimuat
+                if (qrPollingImageInterval) {
+                    clearInterval(qrPollingImageInterval);
+                }
+                // Mulai interval baru untuk me-refresh gambar setiap 10 detik
+                setInterval(() => {
+                    qrCodeImage.src = baseUrl + '?v=' + new Date().getTime();
+                    console.log("Gambar QR diperbarui.");
+                }, 10000);
+            };
+            
+            img.onerror = () => {
+                // Jika gagal (misal, file belum ada), coba lagi nanti
+                console.log("Menunggu gambar QR dari server...");
+            };
+        };
 
-        }, 5000); // Cek setiap 5 detik
+        // Langsung coba sekali, lalu ulangi setiap 5 detik
+        pollForImage(); 
+        qrPollingImageInterval = setInterval(pollForImage, 5000);
     }
 
     function startLoginStatusPolling() {
