@@ -33,17 +33,8 @@
 
     <header class="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-gray-200/80">
         <div class="mx-auto max-w-7xl px-4 py-4 flex items-center justify-between">
-            <a href="{{ url_for('welcome') }}" class="text-2xl font-extrabold tracking-tight flex items-center gap-2">
-                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M10.89 2.5C10.89 2.5 13.11 2.5 13.11 2.5C14.7118 2.5 16.2415 3.01865 17.5188 3.97811C18.7961 4.93757 19.7788 6.28945 20.3601 7.82843C20.9413 9.36742 21.0965 11.0263 20.8105 12.6368C20.5245 14.2473 19.8055 15.7601 18.7291 17.0097C17.6527 18.2594 16.2575 19.1963 14.6975 19.7397C13.1376 20.2831 11.4632 20.4144 9.84021 20.1265C8.21718 19.8386 6.69771 19.1362 5.43285 18.0931C4.16799 17.0501 3.20577 15.7001 2.65888 14.1569C2.112 12.6138 1.99047 10.957 2.2929 9.3496C2.59532 7.74221 3.31063 6.22557 4.38072 4.97405C5.45081 3.72253 6.84279 2.78345 8.39611 2.24169C9.94943 1.69994 11.6148 1.56952 13.2307 1.85966L13.2307 1.85966C13.2307 1.85966 10.89 1.85966 10.89 1.85966C9.2882 1.85966 7.7585 2.37831 6.48119 3.33777C5.20389 4.29723 4.22117 5.64911 3.63991 7.1881C3.05865 8.72708 2.90345 10.386 3.18944 11.9965C3.47543 13.607 4.19445 15.1198 5.27088 16.3695C6.34731 17.6191 7.74249 18.556 9.30248 19.0994C10.8625 19.6428 12.5369 19.7741 14.1599 19.4862C15.7829 19.1983 17.3023 18.4959 18.5672 17.4528C19.832 16.4098 20.7942 15.0598 21.3411 13.5166C21.888 11.9735 22.0095 10.3167 21.7071 8.70928C21.4047 7.10189 20.6894 5.58525 19.6193 4.33373C18.5492 3.08221 17.1572 2.14313 15.6039 1.60137C14.0506 1.05962 12.3852 0.9292 10.7693 1.21934L10.7693 1.21934C10.7693 1.21934 10.7693 1.21934 10.7693 1.21934C9.17046 1.56459 7.69767 2.27488 6.49583 3.28441C5.29399 4.29394 4.40226 5.57868 3.89679 6.99427C3.39132 8.40986 3.28694 9.91745 3.59359 11.385C3.90023 12.8525 4.5902 14.237 5.60128 15.3585C6.61236 16.48 7.91572 17.2941 9.3732 17.712C10.8307 18.1299 12.3861 18.2319 13.8863 18.0069C15.3865 17.7818 16.7865 17.2346 17.9407 16.4385C19.0949 15.6423 19.9575 14.6146 20.4437 13.4357L20.4437 13.4357L20.4437 13.4357C20.4437 13.4357 10.89 1.21934 10.89 1.21934Z" fill="url(#gradient-s-sitono)"/>
-                    <defs>
-                        <linearGradient id="gradient-s-sitono" x1="2.5" y1="11" x2="21.5" y2="11" gradientUnits="userSpaceOnUse">
-                            <stop stop-color="#4F46E5"/>
-                            <stop offset="1" stop-color="#D946EF"/>
-                        </linearGradient>
-                    </defs>
-                </svg>
-                <span class="font-extrabold text-gray-900">Sitono<span class="text-sm font-semibold text-gray-400 ml-1">AI</span></span>
+          <a href="{{ url_for('welcome') }}" class="text-2xl font-extrabold tracking-tight">
+                <span class="text-indigo-600">Si</span>Tono<span class="text-sm font-semibold text-gray-400 ml-1">AI</span>
             </a>
             <div class="flex items-center gap-3">
                 {% if current_user.is_authenticated %}
@@ -63,19 +54,22 @@
               
               <div data-aos="fade-right" data-aos-offset="50">
                 <h1 class="text-4xl md:text-5xl font-black leading-tight tracking-tighter">
-                  AI Cerdas Pertama di Indonesia 
-                  <span class="text-gradient">untuk Balas Komentar TikTok Shop.</span>
+                  AI Cerdas Pertama Di Indonesia <span class="text-gradient">Yang Dapat Membalas Komentar Sesuai Dengan Isi Video.</span>
                 </h1>
                 <p class="mt-5 text-lg text-gray-700">
-                  Sitono AI membalas otomatis setiap komentar di video <span class="font-bold">keranjang kuning</span> Anda, 24/7. Tingkatkan penjualan & engagement tanpa repot.
+                  Sitono AI secara otomatis mendeteksi video 
+                  <span class="font-bold text-yellow-500">keranjang kuning</span> dan 
+                  <span class="font-bold text-indigo-600">membalas komentar</span> video Anda, 
+                  <span class="font-bold text-red-600">24/7.</span> Ubah setiap pertanyaan menjadi 
+                  <span class="font-bold text-lime-600">potensi penjualan</span> tanpa repot.
                 </p>
-                <div class="mt-8 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+                <div class="mt-8 flex items-center gap-4">
                   <a href="{{ url_for('register') }}" 
-                     class="px-8 py-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-lg transition-transform hover:scale-105 inline-block w-full sm:w-auto text-center">
+                     class="px-8 py-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-lg transition-transform hover:scale-105 inline-block">
                     Coba Gratis 1x Jalankan AI
                   </a>
                 </div>
-                <p class="mt-4 text-sm text-gray-500">Fokus ngonten, biar Sitono yang urus interaksi.</p>
+                <p class="mt-4 text-sm text-gray-500">Kamu fokus bikin konten, komentar biar SiTono AI yang urus.</p>
               </div>
           
               <div class="relative flex justify-center" data-aos="fade-left" data-aos-delay="50" data-aos-offset="50">
@@ -104,7 +98,7 @@
                     Karyawan AI Terbaik, Dibuat Khusus untuk Anda
                   </h2>
                   <p class="mt-4 text-gray-600">
-                    Bukan sekadar bot biasa. SiTono hadir untuk meningkatkan engagement & penjualan Anda, 
+                    Bukan sekadar bot biasa. SiTono AI hadir untuk meningkatkan engagement & penjualan Anda, 
                     sementara Anda cukup fokus membuat konten.
                   </p>
             
@@ -116,7 +110,7 @@
                         <h3 class="font-bold text-lg">AI Kontekstual Cerdas</h3>
                         <p class="text-gray-600 mt-1">
                           SiTono <span class="font-bold text-indigo-600">AI</span> memahami isi video Anda, 
-                          bukan sekadar membalas template. Hasilnya? Interaksi terasa alami dan personal.
+                          <span class="font-bold text-indigo-600">bukan sekadar membalas template</span>. Hasilnya? Interaksi terasa alami dan personal.
                         </p>
                       </div>
                     </div>
@@ -126,8 +120,8 @@
                       <div>
                         <h3 class="font-bold text-lg">Fokus 100% pada Engagement</h3>
                         <p class="text-gray-600 mt-1">
-                          Semakin banyak komentar terjawab, semakin tinggi engagement rate akun Anda. 
-                          SiTono menjawab semua komentar dengan cepat sehingga video lebih mudah naik ke FYP.
+                          Semakin banyak komentar terjawab, semakin <span class="font-bold text-blue-800">tinggi engagement rate</span> akun Anda. 
+                          SiTono AI menjawab semua komentar dengan cepat sehingga video lebih mudah <span class="font-bold text-lime-600">naik ke FYP.</span>
                         </p>
                       </div>
                     </div>
@@ -137,8 +131,7 @@
                       <div>
                         <h3 class="font-bold text-lg">CTA yang Menghasilkan Penjualan</h3>
                         <p class="text-gray-600 mt-1">
-                          Bukan hanya menjawab, SiTono mendeteksi komentar berniat beli 
-                          (misalnya: “harga?”, “stok ada?”) dan otomatis memberi ajakan ke keranjang kuning.
+                          Bukan hanya menjawab, SiTono AI mendeteksi komentar berniat beli dan otomatis memberi ajakan ke <span class="font-bold text-yellow-600">keranjang kuning</span>.
                         </p>
                       </div>
                     </div>
@@ -149,7 +142,7 @@
                         <h3 class="font-bold text-lg">Langkah Super Cepat</h3>
                         <p class="text-gray-600 mt-1">
                           Tanpa setting rumit. Cukup Scan QR Code, pilih gaya bicara AI, 
-                          dan dalam hitungan menit SiTono mulai bekerja untuk Anda.
+                          dan dalam hitungan <span class="font-bold text-indigo-600">menit</span> SiTono AI mulai bekerja untuk Anda.
                         </p>
                       </div>
                     </div>
@@ -320,17 +313,8 @@
         <div class="mx-auto max-w-6xl px-4 py-16">
             <div class="grid md:grid-cols-3 gap-8">
                 <div>
-                    <div class="text-2xl font-extrabold text-white flex items-center gap-2">
-                        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M10.89 2.5C10.89 2.5 13.11 2.5 13.11 2.5C14.7118 2.5 16.2415 3.01865 17.5188 3.97811C18.7961 4.93757 19.7788 6.28945 20.3601 7.82843C20.9413 9.36742 21.0965 11.0263 20.8105 12.6368C20.5245 14.2473 19.8055 15.7601 18.7291 17.0097C17.6527 18.2594 16.2575 19.1963 14.6975 19.7397C13.1376 20.2831 11.4632 20.4144 9.84021 20.1265C8.21718 19.8386 6.69771 19.1362 5.43285 18.0931C4.16799 17.0501 3.20577 15.7001 2.65888 14.1569C2.112 12.6138 1.99047 10.957 2.2929 9.3496C2.59532 7.74221 3.31063 6.22557 4.38072 4.97405C5.45081 3.72253 6.84279 2.78345 8.39611 2.24169C9.94943 1.69994 11.6148 1.56952 13.2307 1.85966L13.2307 1.85966C13.2307 1.85966 10.89 1.85966 10.89 1.85966C9.2882 1.85966 7.7585 2.37831 6.48119 3.33777C5.20389 4.29723 4.22117 5.64911 3.63991 7.1881C3.05865 8.72708 2.90345 10.386 3.18944 11.9965C3.47543 13.607 4.19445 15.1198 5.27088 16.3695C6.34731 17.6191 7.74249 18.556 9.30248 19.0994C10.8625 19.6428 12.5369 19.7741 14.1599 19.4862C15.7829 19.1983 17.3023 18.4959 18.5672 17.4528C19.832 16.4098 20.7942 15.0598 21.3411 13.5166C21.888 11.9735 22.0095 10.957 21.7071 8.70928C21.4047 7.10189 20.6894 5.58525 19.6193 4.33373C18.5492 3.08221 17.1572 2.14313 15.6039 1.60137C14.0506 1.05962 12.3852 0.9292 10.7693 1.21934L10.7693 1.21934C10.7693 1.21934 10.7693 1.21934 10.7693 1.21934C9.17046 1.56459 7.69767 2.27488 6.49583 3.28441C5.29399 4.29394 4.40226 5.57868 3.89679 6.99427C3.39132 8.40986 3.28694 9.91745 3.59359 11.385C3.90023 12.8525 4.5902 14.237 5.60128 15.3585C6.61236 16.48 7.91572 17.2941 9.3732 17.712C10.8307 18.1299 12.3861 18.2319 13.8863 18.0069C15.3865 17.7818 16.7865 17.2346 17.9407 16.4385C19.0949 15.6423 19.9575 14.6146 20.4437 13.4357L20.4437 13.4357L20.4437 13.4357C20.4437 13.4357 10.89 1.21934 10.89 1.21934Z" fill="url(#gradient-s-sitono-footer)"/>
-                            <defs>
-                                <linearGradient id="gradient-s-sitono-footer" x1="2.5" y1="11" x2="21.5" y2="11" gradientUnits="userSpaceOnUse">
-                                    <stop stop-color="#818CF8"/> <stop offset="1" stop-color="#D8B4FE"/> </linearGradient>
-                            </defs>
-                        </svg>
-                        <span class="font-extrabold text-white">Sitono<span class="text-sm text-gray-400 ml-1">AI</span></span>
-                    </div>
-                    <p class="mt-3 text-sm text-gray-400">Asisten AI cerdas untuk para kreator dan afiliator TikTok di Indonesia.</p>
+                  <div class="text-2xl font-extrabold text-white"><span class="text-indigo-500">Si</span>Tono<span class="text-sm text-gray-400 ml-1">AI</span></div>
+                  <p class="mt-3 text-sm text-gray-400">Asisten AI cerdas untuk para kreator dan afiliator TikTok di Indonesia.</p>
                 </div>
                 <div>
                     <h4 class="font-semibold text-white">Legal & Kebijakan</h4>
@@ -394,7 +378,7 @@
                 <ul class="list-disc pl-5 space-y-1">
                     <li><strong>Informasi Akun:</strong> Username dan email Anda saat mendaftar di Sitono.</li>
                     <li><strong>Akses TikTok:</strong> Token otorisasi yang aman (diperoleh via QR Code) untuk membaca dan membalas komentar. Kami <strong>tidak pernah</strong> menyimpan password TikTok Anda.</li>
-                    <li><strong>Data Operasional:</strong> Konten komentar yang masuk, teks balasan yang dihasilkan, ID video, dan data penggunaan SiTono untuk analisis dan peningkatan layanan.</li>
+                    <li><strong>Data Operasional:</strong> Konten komentar yang masuk, teks balasan yang dihasilkan, ID video, dan data penggunaan SiTono AI untuk analisis dan peningkatan layanan bagi pelanggan.</li>
                 </ul>
                 <h4 class="font-semibold">2. Penggunaan Data</h4>
                 <p>Data Anda digunakan secara eksklusif untuk:</p>
@@ -402,7 +386,6 @@
                     <li>Menjalankan fungsi utama auto-reply.</li>
                     <li>Memberikan dukungan pelanggan.</li>
                     <li>Meningkatkan kualitas dan akurasi model AI kami dalam mereply komentar.</li>
-                    <li>Mengirimkan informasi penting terkait layanan SiTono.</li>
                 </ul>
                 <h4 class="font-semibold">3. Keamanan Data</h4>
                 <p>Kami menerapkan standar keamanan terbaik untuk melindungi data Anda dari akses tidak sah. Semua koneksi dienkripsi menggunakan SSL.</p>
