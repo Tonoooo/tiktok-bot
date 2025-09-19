@@ -196,40 +196,57 @@
         qrPollingImageInterval = setInterval(pollForImage, 5000);
     }
 
-    function startLoginStatusPolling() {
-        clearInterval(qrPollingLoginInterval);
+    function startQrImagePolling() {
+        let pollAttempts = 0;
+        const maxInitialQrLoadAttempts = 36; // Coba selama ~3 menit
 
-        qrPollingLoginInterval = setInterval(async () => {
-            try {
-                const response = await fetch("{{ url_for('api_get_user_settings_for_ui') }}", { 
-                    method: 'GET',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    }
-                });
-                const data = await response.json();
+        // Hapus interval polling sebelumnya jika ada
+        if (qrPollingImageInterval) {
+            clearInterval(qrPollingImageInterval);
+        }
+
+        const pollFunction = () => {
+            pollAttempts++;
+            const baseUrl = "{{ qr_image_url | safe }}";
+            
+            // Buat URL unik setiap kali dengan menambahkan timestamp sebagai parameter query
+            const imageUrlWithCacheBust = baseUrl + '?v=' + new Date().getTime();
+
+            // Buat objek gambar sementara untuk memeriksa apakah file sudah ada di server
+            const img = new Image();
+            
+            img.onload = () => {
+                // Jika gambar berhasil dimuat, tampilkan di halaman
+                qrLoadingSpinner.classList.add('hidden');
+                qrCodeImage.src = imageUrlWithCacheBust; // Set sumber gambar yang terlihat
+                qrCodeImage.classList.remove('hidden');
+                console.log("QR Code berhasil dimuat dan ditampilkan: " + imageUrlWithCacheBust);
                 
-                // PINDAHKAN LOGIKA INI KE DALAM 'TRY'
-                if (response.ok && data.cookies_json && JSON.parse(data.cookies_json).length > 0 && data.qr_process_active === false) {
-                    clearInterval(qrPollingImageInterval);
-                    clearInterval(qrPollingLoginInterval);
-                    alert('Login TikTok berhasil! Halaman akan disegarkan.');
-                    window.location.reload();
-                } else if (response.ok && data.qr_process_active === false && (!data.cookies_json || JSON.parse(data.cookies_json).length === 0)) {
-                    clearInterval(qrPollingImageInterval);
-                    clearInterval(qrPollingLoginInterval);
-                    loadingText.innerText = 'Login Gagal. Silakan Refresh QR.';
-                    loadingPercentage.innerText = '';
-                    qrLoadingSpinner.classList.add('hidden');
-                    qrCodeImage.classList.add('hidden');
-                    alert('Login TikTok gagal. Silakan coba lagi.');
-                } else {
-                    console.log('Menunggu login TikTok...');
-                }
-            } catch (error) {
-                console.error('Error saat polling status login:', error);
+                // Setelah gambar pertama muncul, kita bisa menghentikan polling yang agresif ini
+                // dan beralih ke mode refresh yang lebih lambat jika diperlukan,
+                // atau cukup hentikan saja karena bot akan terus mengunggah gambar baru.
+                // Untuk saat ini, kita biarkan ia terus polling agar selalu update.
+            };
+
+            img.onerror = () => {
+                // Jika gambar gagal dimuat (misalnya 404 Not Found), coba lagi nanti
+                console.log(`Polling QR image: QR code belum tersedia (Percobaan ${pollAttempts}).`);
+            };
+            
+            // Mulai proses pemuatan gambar
+            img.src = imageUrlWithCacheBust;
+
+            // Hentikan polling jika sudah terlalu lama dan gambar tidak pernah muncul
+            if (pollAttempts > maxInitialQrLoadAttempts && qrCodeImage.classList.contains('hidden')) {
+                clearInterval(qrPollingImageInterval);
+                loadingText.innerText = 'Gagal memuat QR Code. Coba Refresh QR.';
+                console.error("Gagal memuat QR code setelah beberapa percobaan.");
             }
-        }, 5000);
+        };
+
+        // Langsung jalankan sekali, lalu ulangi setiap 5 detik
+        pollFunction();
+        qrPollingImageInterval = setInterval(pollFunction, 5000); 
     }
 
     async function downloadQrCode() {
