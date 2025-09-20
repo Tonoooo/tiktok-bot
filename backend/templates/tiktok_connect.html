@@ -98,11 +98,11 @@
     // --- FUNGSI UTAMA UNTUK POLLING STATUS DARI SERVER ---
     async function pollStatus() {
         try {
-            const response = await fetch("{{ url_for('api_get_user_settings_for_ui') }}");
-            if (!response.ok) throw new Error(`API returned status ${response.status}`);
-            const data = await response.json();
+            const settingsResponse = await fetch("{{ url_for('api_get_user_settings_for_ui') }}");
+            if (!settingsResponse.ok) throw new Error(`API settings returned status ${settingsResponse.status}`);
+            const data = await settingsResponse.json();
 
-            // KONDISI SUKSES: Cookies ditemukan, login berhasil.
+            // KONDISI SUKSES: Cookies ditemukan.
             const cookiesPresent = data.cookies_json && JSON.parse(data.cookies_json).length > 0;
             if (cookiesPresent) {
                 console.log("Login berhasil! Cookies terdeteksi.");
@@ -112,7 +112,7 @@
                 return;
             }
 
-            // KONDISI GAGAL: Proses di backend berhenti, tapi login belum berhasil.
+            // KONDISI GAGAL: Proses di backend berhenti.
             if (!data.qr_process_active) {
                 console.log("Proses QR dihentikan oleh backend dan login tidak berhasil.");
                 stopPolling();
@@ -121,25 +121,41 @@
                 return;
             }
 
-            // KONDISI LOADING: Jika proses masih berjalan, coba update src gambar.
-            // Browser akan otomatis mencoba memuat ulang jika src di-update.
+            // KONDISI LOADING: Cek ketersediaan gambar jika masih tersembunyi.
             if (qrCodeImage.classList.contains('hidden')) {
                 const imageUrl = "{{ qr_image_url | safe }}" + '?v=' + new Date().getTime();
-                console.log("Polling: Mencoba memuat gambar dari URL: " + imageUrl);
-                qrCodeImage.src = imageUrl;
+                console.log("Polling: Mengecek ketersediaan gambar di " + imageUrl);
+
+                // **LOGIKA BARU YANG LEBIH TANGGUH**
+                // Gunakan fetch untuk memastikan gambar ada sebelum menampilkannya.
+                fetch(imageUrl)
+                    .then(imageResponse => {
+                        if (imageResponse.ok) {
+                            console.log("Gambar TERSEDIA di server (status 200). Menampilkan...");
+                            // Jika gambar ada, hentikan loading dan tampilkan.
+                            qrLoadingSpinner.classList.add('hidden');
+                            if (progressInterval) clearInterval(progressInterval);
+                            loadingPercentage.innerText = '100%';
+                            loadingText.innerText = 'QR Code siap discan!';
+                            qrCodeImage.src = imageUrl;
+                            qrCodeImage.classList.remove('hidden');
+                        } else {
+                            console.log(`Gambar belum tersedia (status: ${imageResponse.status}).`);
+                        }
+                    })
+                    .catch(err => console.error("Error saat fetch gambar:", err));
             }
 
         } catch (error) {
             console.error("Error saat polling status:", error);
-            // Anda bisa menghentikan polling jika error jaringan terjadi berkali-kali
         }
     }
 
-    // --- FUNGSI-FUNGSI UNTUK MENGONTROL UI & INTERVAL ---
+    // --- FUNGSI-FUNGSI KONTROL UI & INTERVAL (TETAP SAMA) ---
     function startPolling() {
         if (pollingInterval) clearInterval(pollingInterval);
-        pollStatus(); // Jalankan sekali segera
-        pollingInterval = setInterval(pollStatus, 4000); // Poll setiap 4 detik
+        pollStatus();
+        pollingInterval = setInterval(pollStatus, 4000);
     }
 
     function stopPolling() {
@@ -168,26 +184,21 @@
         loadingText.innerText = 'Memuat QR Code...';
     }
 
-    // --- FUNGSI YANG DIPANGGIL SAAT TOMBOL DIKLIK ---
+    // --- FUNGSI YANG DIPANGGIL SAAT TOMBOL DIKLIK (TETAP SAMA) ---
     async function startQrLoginProcess() {
-        // 1. Update UI ke mode loading
         qrTriggerArea.classList.add('hidden');
         qrDisplayArea.classList.remove('hidden');
         loadingText.innerText = 'Memulai proses di server...';
         startProgressGimmick();
 
         try {
-            // 2. Kirim request ke backend untuk memulai bot
             const response = await fetch("{{ url_for('api_trigger_qr_login') }}", {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                }
+                headers: { 'Content-Type': 'application/json' }
             });
             if (!response.ok) throw new Error("Gagal memulai proses di server.");
             const data = await response.json();
             
-            // 3. Jika backend berhasil, mulai polling
             loadingText.innerText = 'Menunggu QR Code dari bot...';
             startPolling();
 
@@ -196,23 +207,7 @@
             resetUi();
         }
     }
-
-    // --- EVENT LISTENER UNTUK GAMBAR (DITETAPKAN SEKALI) ---
-    qrCodeImage.onload = () => {
-        console.log("Gambar QR BERHASIL dimuat (event onload).");
-        qrLoadingSpinner.classList.add('hidden');
-        if (progressInterval) clearInterval(progressInterval);
-        loadingPercentage.innerText = '100%';
-        loadingText.innerText = 'QR Code siap discan!';
-        qrCodeImage.classList.remove('hidden');
-    };
-
-    qrCodeImage.onerror = () => {
-        console.log("Gambar QR GAGAL dimuat atau belum tersedia (event onerror).");
-        // Biarkan polling berjalan, ia akan mencoba lagi pada interval berikutnya
-    };
-
-    // --- FUNGSI UTILITAS LAINNYA ---
+    
     async function downloadQrCode() {
         const imageUrl = qrCodeImage.src;
         if (!imageUrl || qrCodeImage.classList.contains('hidden')) {
@@ -270,7 +265,7 @@
         }
     }
 
-    // --- INISIALISASI SAAT HALAMAN DIMUAT ---
+    // --- INISIALISASI SAAT HALAMAN DIMUAT (TETAP SAMA) ---
     window.onload = () => {
         const qrProcessActive = {{ qr_process_active | tojson }};
         if (qrProcessActive) {
