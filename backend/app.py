@@ -456,7 +456,7 @@ def onboarding_tiktok_connect(): # Rute khusus untuk onboarding TikTok Connect
     qr_process_active = user.qr_process_active
     qr_generated_at = user.qr_generated_at
     
-    qr_image_url = url_for('serve_qr_code', filename=f'qrcode_{user.id}.png')
+    qr_image_url = url_for('serve_qr_code', filename=f'qrcode_{user.id}.png', _external=True)
     
     return render_template('tiktok_connect.html', 
                             cookies_present=cookies_present, 
@@ -500,7 +500,7 @@ def tiktok_connect():
     cookies_present = bool(user.cookies_json and json.loads(user.cookies_json))
     qr_process_active = user.qr_process_active
     qr_generated_at = user.qr_generated_at
-    qr_image_url = url_for('serve_qr_code', filename=f'qrcode_{user.id}.png')
+    qr_image_url = url_for('serve_qr_code', filename=f'qrcode_{user.id}.png', _external=True)
     
     return render_template('tiktok_connect.html', 
                             cookies_present=cookies_present, 
@@ -571,7 +571,7 @@ def tiktok_connect_legacy(): # Rute ini bisa dihapus atau digunakan untuk mode n
     cookies_present = bool(user.cookies_json and json.loads(user.cookies_json))
     qr_process_active = user.qr_process_active
     qr_generated_at = user.qr_generated_at
-    qr_image_url = url_for('serve_qr_code', filename=f'qrcode_{user.id}.png')
+    qr_image_url = url_for('serve_qr_code', filename=f'qrcode_{user.id}.png', _external=True)
     
     return render_template('tiktok_connect.html', 
                             cookies_present=cookies_present, 
