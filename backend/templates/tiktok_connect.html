@@ -178,7 +178,12 @@
 
         try {
             // 2. Kirim request ke backend untuk memulai bot
-            const response = await fetch("{{ url_for('api_trigger_qr_login') }}");
+            const response = await fetch("{{ url_for('api_trigger_qr_login') }}", {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            });
             if (!response.ok) throw new Error("Gagal memulai proses di server.");
             const data = await response.json();
             
