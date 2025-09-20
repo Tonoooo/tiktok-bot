@@ -1089,7 +1089,7 @@ def get_processed_videos(user_id):
 QR_CODE_TEMP_DIR_SERVER = os.path.join(project_root, 'qr_codes_temp_server') # Folder sementara di VPS
 os.makedirs(QR_CODE_TEMP_DIR_SERVER, exist_ok=True) # Buat jika belum ada
 
-@app.route('/static/qr_codes/<filename>')
+@app.route('/qrcodes/<filename>')
 def serve_qr_code(filename):
     # Melayani gambar QR dari folder sementara di VPS
     return send_from_directory(QR_CODE_TEMP_DIR_SERVER, filename)
