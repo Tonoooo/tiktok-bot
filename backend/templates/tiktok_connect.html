@@ -83,159 +83,131 @@
 </div>
 
 <script>
+    // --- Elemen-elemen UI ---
     const qrTriggerArea = document.getElementById('qr-trigger-area');
-    const triggerQrButton = document.getElementById('trigger-qr-button');
     const qrDisplayArea = document.getElementById('qr-display-area');
     const qrLoadingSpinner = document.getElementById('qr-loading-spinner');
     const loadingText = document.getElementById('loading-text');
     const loadingPercentage = document.getElementById('loading-percentage');
     const qrCodeImage = document.getElementById('qr-code-image');
 
-    let qrPollingImageInterval = null;
-    let qrPollingLoginInterval = null;
-    let qrSimulatedProgress = 0;
+    // --- Variabel untuk Interval ---
+    let pollingInterval = null;
+    let progressInterval = null;
 
-    function simulateQrProgress() {
-        if (qrSimulatedProgress < 90) {
-            qrSimulatedProgress += Math.floor(Math.random() * 5) + 1;
-            if (qrSimulatedProgress > 90) qrSimulatedProgress = 90;
+    // --- FUNGSI UTAMA UNTUK POLLING STATUS DARI SERVER ---
+    async function pollStatus() {
+        try {
+            const response = await fetch("{{ url_for('api_get_user_settings_for_ui') }}");
+            if (!response.ok) throw new Error(`API returned status ${response.status}`);
+            const data = await response.json();
+
+            // KONDISI SUKSES: Cookies ditemukan, login berhasil.
+            const cookiesPresent = data.cookies_json && JSON.parse(data.cookies_json).length > 0;
+            if (cookiesPresent) {
+                console.log("Login berhasil! Cookies terdeteksi.");
+                stopPolling();
+                alert('Login TikTok berhasil! Halaman akan dimuat ulang.');
+                window.location.reload();
+                return;
+            }
+
+            // KONDISI GAGAL: Proses di backend berhenti, tapi login belum berhasil.
+            if (!data.qr_process_active) {
+                console.log("Proses QR dihentikan oleh backend dan login tidak berhasil.");
+                stopPolling();
+                alert('Proses login QR gagal atau waktu habis. Silakan coba lagi.');
+                resetUi();
+                return;
+            }
+
+            // KONDISI LOADING: Jika proses masih berjalan, coba update src gambar.
+            // Browser akan otomatis mencoba memuat ulang jika src di-update.
+            if (qrCodeImage.classList.contains('hidden')) {
+                const imageUrl = "{{ qr_image_url | safe }}" + '?v=' + new Date().getTime();
+                console.log("Polling: Mencoba memuat gambar dari URL: " + imageUrl);
+                qrCodeImage.src = imageUrl;
+            }
+
+        } catch (error) {
+            console.error("Error saat polling status:", error);
+            // Anda bisa menghentikan polling jika error jaringan terjadi berkali-kali
         }
-        loadingPercentage.innerText = qrSimulatedProgress + '%';
     }
 
-    function resetQrUi() {
-        clearInterval(qrPollingImageInterval);
-        clearInterval(qrPollingLoginInterval);
+    // --- FUNGSI-FUNGSI UNTUK MENGONTROL UI & INTERVAL ---
+    function startPolling() {
+        if (pollingInterval) clearInterval(pollingInterval);
+        pollStatus(); // Jalankan sekali segera
+        pollingInterval = setInterval(pollStatus, 4000); // Poll setiap 4 detik
+    }
+
+    function stopPolling() {
+        if (pollingInterval) clearInterval(pollingInterval);
+        if (progressInterval) clearInterval(progressInterval);
+    }
+    
+    function startProgressGimmick() {
+        let progress = 0;
+        loadingPercentage.innerText = '0%';
+        if (progressInterval) clearInterval(progressInterval);
+        progressInterval = setInterval(() => {
+            if (progress < 95) {
+                progress += Math.floor(Math.random() * 5) + 2;
+                loadingPercentage.innerText = Math.min(progress, 95) + '%';
+            }
+        }, 800);
+    }
+
+    function resetUi() {
+        stopPolling();
         qrTriggerArea.classList.remove('hidden');
         qrDisplayArea.classList.add('hidden');
         qrLoadingSpinner.classList.remove('hidden');
         qrCodeImage.classList.add('hidden');
-        loadingText.innerText = 'Menyiapkan QR Code...';
-        loadingPercentage.innerText = '0%';
-        qrSimulatedProgress = 0;
+        loadingText.innerText = 'Memuat QR Code...';
     }
 
+    // --- FUNGSI YANG DIPANGGIL SAAT TOMBOL DIKLIK ---
     async function startQrLoginProcess() {
+        // 1. Update UI ke mode loading
         qrTriggerArea.classList.add('hidden');
         qrDisplayArea.classList.remove('hidden');
-        qrCodeImage.classList.add('hidden');
-        qrLoadingSpinner.classList.remove('hidden');
-        loadingText.innerText = 'Memulai proses login QR...';
-        qrSimulatedProgress = 0;
-        loadingPercentage.innerText = '0%';
-        qrPollingImageInterval = setInterval(simulateQrProgress, 1000);
+        loadingText.innerText = 'Memulai proses di server...';
+        startProgressGimmick();
 
         try {
-            const response = await fetch("{{ url_for('api_trigger_qr_login') }}", {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                }
-            });
+            // 2. Kirim request ke backend untuk memulai bot
+            const response = await fetch("{{ url_for('api_trigger_qr_login') }}");
+            if (!response.ok) throw new Error("Gagal memulai proses di server.");
             const data = await response.json();
-            if (response.ok) {
-                loadingText.innerText = 'Sedang Memproses QR Code';
-                startQrImagePolling();
-                startLoginStatusPolling();
-            } else {
-                clearInterval(qrPollingImageInterval);
-                alert('Gagal memulai QR login: ' + data.message);
-                resetQrUi();
-            }
+            
+            // 3. Jika backend berhasil, mulai polling
+            loadingText.innerText = 'Menunggu QR Code dari bot...';
+            startPolling();
+
         } catch (error) {
-            clearInterval(qrPollingImageInterval);
-            alert('Terjadi kesalahan jaringan saat mencoba memulai QR login: ' + error);
-            resetQrUi();
+            alert('Terjadi kesalahan jaringan saat mencoba memulai QR login: ' + error.message);
+            resetUi();
         }
     }
 
-    function startQrImagePolling() {
-        let pollAttempts = 0;
-        const maxInitialQrLoadAttempts = 36; // Maksimal 2 menit (24 * 5 detik) untuk QR pertama kali muncul
+    // --- EVENT LISTENER UNTUK GAMBAR (DITETAPKAN SEKALI) ---
+    qrCodeImage.onload = () => {
+        console.log("Gambar QR BERHASIL dimuat (event onload).");
+        qrLoadingSpinner.classList.add('hidden');
+        if (progressInterval) clearInterval(progressInterval);
+        loadingPercentage.innerText = '100%';
+        loadingText.innerText = 'QR Code siap discan!';
+        qrCodeImage.classList.remove('hidden');
+    };
 
-        clearInterval(qrPollingImageInterval); 
+    qrCodeImage.onerror = () => {
+        console.log("Gambar QR GAGAL dimuat atau belum tersedia (event onerror).");
+        // Biarkan polling berjalan, ia akan mencoba lagi pada interval berikutnya
+    };
 
-        qrPollingImageInterval = setInterval(async () => {
-            pollAttempts++;
-            const imageUrl = "{{ qr_image_url | safe }}";
-            
-            if (!imageUrl) {
-                console.log("Polling QR image: URL gambar QR kosong. Menunggu...");
-                // Lanjutkan simulasi progress jika belum mencapai 100%
-                if (qrSimulatedProgress < 90) simulateQrProgress(); // Tetap di bawah 100% jika gambar belum ada
-                return;
-            }
-            
-            try {
-                const img = new Image();
-                img.onload = () => {
-                    qrLoadingSpinner.classList.add('hidden');
-                    qrCodeImage.src = imageUrl + '?t=' + new Date().getTime();
-                    qrCodeImage.classList.remove('hidden');
-                    loadingText.innerText = 'QR Code siap discan!';
-                    loadingPercentage.innerText = '100%';
-                    console.log("QR Code berhasil dimuat.");
-                    // Jangan menghentikan interval gambar di sini, biar terus update
-                    // Cukup hentikan simulasi progress
-                    clearInterval(qrSimulatedProgress);
-                };
-                img.onerror = () => {
-                    console.log(`Polling QR image: QR code belum tersedia (Percobaan ${pollAttempts}).`);
-                    if (qrSimulatedProgress < 90) simulateQrProgress();
-                };
-                img.src = imageUrl + '?t=' + new Date().getTime();
-            } catch (error) {
-                console.error("Error saat polling QR image:", error);
-                if (qrSimulatedProgress < 90) simulateQrProgress();
-            }
-
-            if (pollAttempts > maxInitialQrLoadAttempts && qrCodeImage.classList.contains('hidden')) {
-                console.error("Gagal memuat QR code setelah beberapa percobaan. Membatalkan polling gambar.");
-                clearInterval(qrPollingImageInterval);
-                loadingText.innerText = 'Gagal memuat QR Code. Coba Refresh QR.';
-                loadingPercentage.innerText = '';
-            }
-
-        }, 5000);
-    }
-
-    function startLoginStatusPolling() {
-        clearInterval(qrPollingLoginInterval);
-
-        qrPollingLoginInterval = setInterval(async () => {
-            try {
-                const response = await fetch("{{ url_for('api_get_user_settings_for_ui') }}", { 
-                    method: 'GET',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    }
-                });
-                const data = await response.json();
-                
-                if (response.ok && data.cookies_json && JSON.parse(data.cookies_json).length > 0 && data.qr_process_active === false) {
-                    clearInterval(qrPollingImageInterval);
-                    clearInterval(qrPollingLoginInterval);
-                    alert('Login TikTok berhasil! Halaman akan disegarkan.');
-                    window.location.reload();
-                } else if (response.ok && data.qr_process_active === false && (!data.cookies_json || JSON.parse(data.cookies_json).length === 0)) {
-                    clearInterval(qrPollingImageInterval);
-                    clearInterval(qrPollingLoginInterval);
-                    loadingText.innerText = 'Login Gagal. Silakan Refresh QR.';
-                    loadingPercentage.innerText = '';
-                    qrLoadingSpinner.classList.add('hidden');
-                    qrCodeImage.classList.add('hidden');
-                    alert('Login TikTok gagal. Silakan coba lagi.');
-                } else {
-                    console.log('Menunggu login TikTok...');
-                    // Tidak ada lagi pengecekan kadaluarsa di sini
-                }
-            } catch (error) {
-                console.error('Error saat polling status login:', error);
-            }
-        }, 5000);
-
-    }
-
+    // --- FUNGSI UTILITAS LAINNYA ---
     async function downloadQrCode() {
         const imageUrl = qrCodeImage.src;
         if (!imageUrl || qrCodeImage.classList.contains('hidden')) {
@@ -269,26 +241,6 @@
         await startQrLoginProcess();
     }
 
-    window.onload = () => {
-        const qrProcessActive = {{ qr_process_active | tojson }};
-        const cookiesPresent = {{ cookies_present | tojson }};
-
-        if (cookiesPresent) {
-            return;
-        }
-
-        if (qrProcessActive) {
-            qrTriggerArea.classList.add('hidden');
-            qrDisplayArea.classList.remove('hidden');
-            
-            loadingText.innerText = 'Melanjutkan proses QR Code...';
-            startQrImagePolling();
-            startLoginStatusPolling();
-        } else {
-            resetQrUi();
-        }
-    };
-
     async function disconnectTiktok() {
         if (!confirm('Anda yakin ingin memutuskan koneksi TikTok? AI tidak akan bisa membalas komentar.')) {
             return;
@@ -312,5 +264,17 @@
             alert('Terjadi kesalahan jaringan saat mencoba memutuskan koneksi: ' + error);
         }
     }
+
+    // --- INISIALISASI SAAT HALAMAN DIMUAT ---
+    window.onload = () => {
+        const qrProcessActive = {{ qr_process_active | tojson }};
+        if (qrProcessActive) {
+            qrTriggerArea.classList.add('hidden');
+            qrDisplayArea.classList.remove('hidden');
+            loadingText.innerText = 'Melanjutkan proses QR...';
+            startProgressGimmick();
+            startPolling();
+        }
+    };
 </script>
 {% endblock %}
