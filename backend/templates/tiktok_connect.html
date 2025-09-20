@@ -102,7 +102,7 @@
             if (!settingsResponse.ok) throw new Error(`API settings returned status ${settingsResponse.status}`);
             const data = await settingsResponse.json();
 
-            // KONDISI SUKSES: Cookies ditemukan.
+            // KONDISI SUKSES: Cookies ditemukan, login berhasil.
             const cookiesPresent = data.cookies_json && JSON.parse(data.cookies_json).length > 0;
             if (cookiesPresent) {
                 console.log("Login berhasil! Cookies terdeteksi.");
@@ -112,7 +112,7 @@
                 return;
             }
 
-            // KONDISI GAGAL: Proses di backend berhenti.
+            // KONDISI GAGAL: Proses di backend berhenti, tapi login belum berhasil.
             if (!data.qr_process_active) {
                 console.log("Proses QR dihentikan oleh backend dan login tidak berhasil.");
                 stopPolling();
@@ -121,41 +121,22 @@
                 return;
             }
 
-            // KONDISI LOADING: Cek ketersediaan gambar jika masih tersembunyi.
-            if (qrCodeImage.classList.contains('hidden')) {
-                const imageUrl = "{{ qr_image_url | safe }}" + '?v=' + new Date().getTime();
-                console.log("Polling: Mengecek ketersediaan gambar di " + imageUrl);
-
-                // **LOGIKA BARU YANG LEBIH TANGGUH**
-                // Gunakan fetch untuk memastikan gambar ada sebelum menampilkannya.
-                fetch(imageUrl)
-                    .then(imageResponse => {
-                        if (imageResponse.ok) {
-                            console.log("Gambar TERSEDIA di server (status 200). Menampilkan...");
-                            // Jika gambar ada, hentikan loading dan tampilkan.
-                            qrLoadingSpinner.classList.add('hidden');
-                            if (progressInterval) clearInterval(progressInterval);
-                            loadingPercentage.innerText = '100%';
-                            loadingText.innerText = 'QR Code siap discan!';
-                            qrCodeImage.src = imageUrl;
-                            qrCodeImage.classList.remove('hidden');
-                        } else {
-                            console.log(`Gambar belum tersedia (status: ${imageResponse.status}).`);
-                        }
-                    })
-                    .catch(err => console.error("Error saat fetch gambar:", err));
-            }
+            // KONDISI LOADING: Update src gambar agar browser mencoba memuatnya.
+            // Ini akan memicu event onload atau onerror pada elemen gambar.
+            const imageUrl = "{{ qr_image_url | safe }}" + '?v=' + new Date().getTime();
+            console.log("Polling: Menyetel src gambar ke: " + imageUrl);
+            qrCodeImage.src = imageUrl;
 
         } catch (error) {
             console.error("Error saat polling status:", error);
         }
     }
-
-    // --- FUNGSI-FUNGSI KONTROL UI & INTERVAL (TETAP SAMA) ---
+    
+    // --- FUNGSI-FUNGSI KONTROL UI & INTERVAL ---
     function startPolling() {
         if (pollingInterval) clearInterval(pollingInterval);
-        pollStatus();
-        pollingInterval = setInterval(pollStatus, 4000);
+        pollStatus(); // Jalankan sekali segera
+        pollingInterval = setInterval(pollStatus, 5000); // Poll setiap 5 detik
     }
 
     function stopPolling() {
@@ -184,7 +165,7 @@
         loadingText.innerText = 'Memuat QR Code...';
     }
 
-    // --- FUNGSI YANG DIPANGGIL SAAT TOMBOL DIKLIK (TETAP SAMA) ---
+    // --- FUNGSI YANG DIPANGGIL SAAT TOMBOL DIKLIK ---
     async function startQrLoginProcess() {
         qrTriggerArea.classList.add('hidden');
         qrDisplayArea.classList.remove('hidden');
@@ -208,6 +189,21 @@
         }
     }
     
+    // --- EVENT LISTENER UNTUK GAMBAR (DITETAPKAN SEKALI) ---
+    qrCodeImage.onload = () => {
+        console.log("Gambar QR BERHASIL dimuat (event onload).");
+        qrLoadingSpinner.classList.add('hidden');
+        if (progressInterval) clearInterval(progressInterval);
+        loadingPercentage.innerText = '100%';
+        loadingText.innerText = 'QR Code siap discan!';
+        qrCodeImage.classList.remove('hidden');
+    };
+
+    qrCodeImage.onerror = () => {
+        console.log("Gambar QR GAGAL dimuat atau belum tersedia (event onerror).");
+    };
+
+    // --- FUNGSI UTILITAS LAINNYA ---
     async function downloadQrCode() {
         const imageUrl = qrCodeImage.src;
         if (!imageUrl || qrCodeImage.classList.contains('hidden')) {
@@ -265,7 +261,7 @@
         }
     }
 
-    // --- INISIALISASI SAAT HALAMAN DIMUAT (TETAP SAMA) ---
+    // --- INISIALISASI SAAT HALAMAN DIMUAT ---
     window.onload = () => {
         const qrProcessActive = {{ qr_process_active | tojson }};
         if (qrProcessActive) {
@@ -277,4 +273,6 @@
         }
     };
 </script>
+
+
 {% endblock %}
