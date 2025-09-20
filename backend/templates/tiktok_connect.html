@@ -120,12 +120,30 @@
                 resetUi();
                 return;
             }
-
-            // KONDISI LOADING: Update src gambar agar browser mencoba memuatnya.
-            // Ini akan memicu event onload atau onerror pada elemen gambar.
-            const imageUrl = "{{ qr_image_url | safe }}" + '?v=' + new Date().getTime();
-            console.log("Polling: Menyetel src gambar ke: " + imageUrl);
-            qrCodeImage.src = imageUrl;
+            
+            // **LOGIKA BARU YANG LEBIH TANGGUH**
+            // Hanya cek gambar jika belum tampil
+            if (qrCodeImage.classList.contains('hidden')) {
+                const imageUrl = "{{ qr_image_url | safe }}" + '?v=' + new Date().getTime();
+                console.log("Polling: Mengecek ketersediaan gambar di " + imageUrl);
+                
+                // Gunakan fetch untuk memastikan gambar ada sebelum menampilkannya.
+                fetch(imageUrl)
+                    .then(imageResponse => {
+                        if (imageResponse.ok) { // Status 200 OK
+                            console.log("Gambar TERSEDIA di server. Menampilkan...");
+                            qrCodeImage.src = imageUrl; // Baru set src setelah yakin ada
+                        } else {
+                            console.log(`Gambar belum tersedia (status: ${imageResponse.status}).`);
+                        }
+                    })
+                    .catch(err => console.error("Error saat fetch gambar:", err));
+            } else {
+                 // Jika gambar sudah tampil, tetap update src untuk mendapatkan versi terbaru
+                 const imageUrl = "{{ qr_image_url | safe }}" + '?v=' + new Date().getTime();
+                 qrCodeImage.src = imageUrl;
+                 console.log("Polling: Memperbarui gambar QR yang sudah ada.");
+            }
 
         } catch (error) {
             console.error("Error saat polling status:", error);
