@@ -166,7 +166,6 @@
         loadingText.innerText = 'Memuat QR Code...';
     }
 
-    // --- FUNGSI YANG DIPANGGIL DARI TOMBOL ---
     async function startQrLoginProcess() {
         // 1. Update UI ke mode loading
         qrTriggerArea.classList.add('hidden');
@@ -177,16 +176,25 @@
         try {
             // 2. Kirim request ke backend untuk memulai bot
             const response = await fetch("{{ url_for('api_trigger_qr_login') }}");
-            const data = await response.json();
+            
+            // --- PENAMBAHAN PENTING DIMULAI DI SINI ---
+            const contentType = response.headers.get("content-type");
+            if (!response.ok || !contentType || !contentType.includes("application/json")) {
+                // Jika respons bukan JSON, kemungkinan besar ini adalah redirect ke halaman login
+                alert('Gagal memulai proses. Sesi Anda mungkin telah berakhir. Silakan muat ulang halaman dan masuk kembali jika perlu.');
+                resetUi();
+                // Muat ulang halaman untuk memaksa pengguna ke halaman login jika sesi habis
+                window.location.reload(); 
+                return; // Hentikan eksekusi
+            }
+            // --- PENAMBAHAN PENTING SELESAI ---
+
+            const data = await response.json(); // Sekarang ini aman untuk dijalankan
             
             // 3. Jika backend berhasil, mulai polling
-            if (response.ok) {
-                loadingText.innerText = 'Menunggu QR Code dari bot...';
-                startPolling();
-            } else {
-                alert('Gagal memulai proses QR di server: ' + data.message);
-                resetUi();
-            }
+            loadingText.innerText = 'Memproses QR Code...';
+            startPolling();
+
         } catch (error) {
             alert('Terjadi kesalahan jaringan: ' + error);
             resetUi();
