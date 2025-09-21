@@ -26,10 +26,7 @@ from rq.job import Job
 from rq.exceptions import NoSuchJobError
 from akses_komen.qr_login_service import MAX_LOGIN_WAIT_TIME
 
-def from_json(value):
-    return json.loads(value)
 
-app.jinja_env.filters['fromjson'] = from_json
 
 
 # Secara eksplisit tambahkan direktori proyek ke sys.path
@@ -70,6 +67,11 @@ app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_prefix=1) 
 db.init_app(app)
 
 app.jinja_env.globals['datetime'] = datetime
+
+def from_json(value):
+    return json.loads(value)
+
+app.jinja_env.filters['fromjson'] = from_json
 
 # --- Konfigurasi Flask-Session (BARU) ---
 app.config["SESSION_TYPE"] = "redis"
