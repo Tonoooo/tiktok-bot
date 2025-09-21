@@ -927,7 +927,7 @@ def api_onboarding_trigger_trial_bot():
 
         # Antrekan tugas bot komentar
         # Untuk uji coba, kita bisa menggunakan daily_run_count=1 atau nilai default
-        enqueue_comment_processing_task(user.id)
+        enqueue_comment_processing_task(user.id, is_trial_run=True)
 
         return jsonify({"message": "Uji coba bot komentar berhasil dimulai!"}), 200
     except Exception as e:

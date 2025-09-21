@@ -76,8 +76,8 @@ def run_tiktok_bot_task(user_id: int): # PERUBAHAN: Hapus api_client dari signat
 
         # BARU: Logika untuk menentukan apakah bot harus berjalan
         # Bot berjalan jika (is_active True AND subscribed) ATAU (onboarding_stage TRIAL_RUNNING)
-        if not ((is_active and is_subscribed) or onboarding_stage == 'TRIAL_RUNNING'):
-            print(f"Bot untuk user {user_id} tidak aktif, tidak berlangganan, dan tidak dalam tahap TRIAL_RUNNING. Melewati proses.")
+        if not (is_trial_run or (is_active and is_subscribed)):
+            print(f"Bot untuk user {user_id} tidak aktif, tidak berlangganan, dan BUKAN uji coba. Melewati proses.")
             return
 
         if not tiktok_username:

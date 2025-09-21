@@ -35,13 +35,13 @@ def enqueue_qr_login_task(user_id: int):
     print(f"Tugas QR login untuk user {user_id} di antrean RQ dengan timeout {MAX_LOGIN_WAIT_TIME}s: {job.id}")
     return job
 
-def enqueue_comment_processing_task(user_id: int):
+def enqueue_comment_processing_task(user_id: int, is_trial_run: bool = False):
     """
     Menempatkan tugas pemrosesan komentar ke antrean RQ.
     Bot worker akan mengambil dan menjalankan tugas run_tiktok_bot_task.
     """
     # NOTE: run_tiktok_bot_task akan memanggil APIClient di dalamnya.
-    job = q.enqueue(run_tiktok_bot_task, user_id)
+    job = q.enqueue(run_tiktok_bot_task, user_id, is_trial_run)
     print(f"Tugas pemrosesan komentar untuk user {user_id} di antrean RQ: {job.id}")
     return job
 
