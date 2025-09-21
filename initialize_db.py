@@ -55,12 +55,12 @@ with app.app_context():
     hashed_password = generate_password_hash("123456789")
 
     # Cek apakah user sudah ada untuk mencegah duplikasi jika script dijalankan berkali-kali
-    if not User.query.filter_by(username='cozy').first():
+    if not User.query.filter_by(username='kokokekek805').first():
         user1 = User(
-            username='cozy', 
-            email='balanjan.id.pusat@gmail.com', 
+            username='kokokekek805', 
+            email='kekek2553@gmail.com', 
             password_hash=hashed_password,
-            tiktok_username='cozy', # Digabung dari CreatorSettings
+            tiktok_username='kokokekek805', # Digabung dari CreatorSettings
             creator_character_description='pria, usia 20-an, tegas, suka humor, sering menggunakan kata "mantap"', # Digabung
             is_active=True, # Digabung
             daily_run_count=0, # Digabung
@@ -68,10 +68,10 @@ with app.app_context():
             cookies_json=json.dumps([]) # Default: list kosong untuk cookies
         )
         db.session.add(user1)
-        print("User 'cozy' (dengan pengaturan creator) ditambahkan.")
+        print("User 'kokokekek805' (dengan pengaturan creator) ditambahkan.")
     else:
-        user1 = User.query.filter_by(username='cozy').first()
-        print("User 'cozy' sudah ada.")
+        user1 = User.query.filter_by(username='kokokekek805').first()
+        print("User 'kokokekek805' sudah ada.")
 
     # Cek apakah admin sudah ada
     if not User.query.filter_by(username='admin').first():
