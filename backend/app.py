@@ -26,6 +26,11 @@ from rq.job import Job
 from rq.exceptions import NoSuchJobError
 from akses_komen.qr_login_service import MAX_LOGIN_WAIT_TIME
 
+def from_json(value):
+    return json.loads(value)
+
+app.jinja_env.filters['fromjson'] = from_json
+
 
 # Secara eksplisit tambahkan direktori proyek ke sys.path
 # Ini memastikan Python dapat menemukan 'backend' sebagai paket.
@@ -1472,6 +1477,46 @@ def admin_edit_user(user_id):
         return redirect(url_for('admin_users'))
 
     return render_template('admin/edit_user.html', user=user_to_edit)
+# ... (di bawah fungsi admin_edit_user)
+
+@app.route('/admin/test-bots', methods=['GET', 'POST'])
+@login_required
+def admin_test_bots():
+    if not current_user.is_admin:
+        flash('Anda tidak memiliki akses ke halaman ini.', 'danger')
+        return redirect(url_for('dashboard'))
+
+    if request.method == 'POST':
+        user_id = request.form.get('user_id', type=int)
+        if not user_id:
+            flash('User ID tidak valid.', 'danger')
+            return redirect(url_for('admin_test_bots'))
+
+        user_to_test = User.query.get(user_id)
+        if not user_to_test:
+            flash(f'User dengan ID {user_id} tidak ditemukan.', 'danger')
+            return redirect(url_for('admin_test_bots'))
+
+        # Cek tombol mana yang ditekan
+        if 'trigger_qr_bot' in request.form:
+            # Logika untuk memicu bot QR
+            enqueue_qr_login_task(user_id)
+            flash(f'Tugas Bot QR Code untuk user {user_to_test.username} (ID: {user_id}) telah dikirim ke worker.', 'success')
+
+        elif 'trigger_comment_bot' in request.form:
+            # Logika untuk memicu bot komen
+            if not user_to_test.cookies_json or len(json.loads(user_to_test.cookies_json)) == 0:
+                flash(f'User {user_to_test.username} (ID: {user_id}) tidak memiliki cookies. Jalankan Bot QR terlebih dahulu.', 'warning')
+            else:
+                # Kita jalankan sebagai "trial run" untuk menggunakan logika bot yang relevan
+                enqueue_comment_processing_task(user_id, is_trial_run=True)
+                flash(f'Tugas Bot Komen untuk user {user_to_test.username} (ID: {user_id}) telah dikirim ke worker.', 'success')
+
+        return redirect(url_for('admin_test_bots'))
+
+    # Untuk metode GET, ambil semua user untuk ditampilkan di dropdown
+    users = User.query.all()
+    return render_template('admin/test_bots.html', users=users)
 
 if __name__ == '__main__':
     print(f"Aplikasi Flask akan menggunakan database di: {db_path}") 

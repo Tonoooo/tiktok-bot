@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block title %}Admin - Pengujian Bot{% endblock %}
+
+{% block content %}
+<div class="container mx-auto p-4">
+    <h1 class="text-3xl font-bold text-gray-900 mb-6">Pengujian Bot</h1>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+
+        <div class="bg-white p-6 rounded-lg shadow-md">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4">Uji Bot QR Code & Login</h2>
+            <p class="text-sm text-gray-600 mb-4">
+                Fitur ini akan memicu alur login QR Code untuk pengguna yang dipilih. Gunakan ini untuk mendapatkan atau memperbarui cookies TikTok pengguna.
+            </p>
+            <form method="POST">
+                <div class="mb-4">
+                    <label for="qr_user_id" class="block text-sm font-medium text-gray-700">Pilih Pengguna</label>
+                    <select id="qr_user_id" name="user_id" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
+                        {% for user in users %}
+                            <option value="{{ user.id }}">{{ user.username }} (ID: {{ user.id }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <button type="submit" name="trigger_qr_bot" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+                    Jalankan Bot QR Code
+                </button>
+            </form>
+        </div>
+
+        <div class="bg-white p-6 rounded-lg shadow-md">
+            <h2 class="text-xl font-semibold text-gray-800 mb-4">Uji Bot Komen</h2>
+            <p class="text-sm text-gray-600 mb-4">
+                Fitur ini akan memicu bot untuk memproses dan membalas komentar menggunakan cookies yang sudah ada. Pastikan pengguna sudah memiliki cookies.
+            </p>
+            <form method="POST">
+                <div class="mb-4">
+                    <label for="comment_user_id" class="block text-sm font-medium text-gray-700">Pilih Pengguna (Disarankan yang Punya Cookies)</label>
+                    <select id="comment_user_id" name="user_id" class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
+                        {% for user in users %}
+                            <option value="{{ user.id }}">
+                                {{ user.username }} (ID: {{ user.id }}) {% if user.cookies_json and user.cookies_json|fromjson|length > 0 %}✅ Punya Cookies{% endif %}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <button type="submit" name="trigger_comment_bot" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded">
+                    Jalankan Bot Komen
+                </button>
+            </form>
+        </div>
+
+    </div>
+</div>
+{% endblock %}
