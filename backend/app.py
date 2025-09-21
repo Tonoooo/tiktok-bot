@@ -22,6 +22,9 @@ from backend.forms import RegistrationForm, LoginForm, AiSettingsForm
 from PIL import Image # Untuk memproses gambar QR
 import io # Untuk memproses gambar QR
 
+from rq.job import Job
+from rq.exceptions import NoSuchJobError
+
 # Secara eksplisit tambahkan direktori proyek ke sys.path
 # Ini memastikan Python dapat menemukan 'backend' sebagai paket.
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir))
@@ -710,9 +713,11 @@ def api_trigger_qr_login():
 
         db.session.add(user)
         db.session.commit()
-
-        enqueue_qr_login_task(user.id)
-
+        
+        job = enqueue_qr_login_task(user.id)
+        session['qr_login_job_id'] = job.id
+        print(f"QR login task enqueued with Job ID: {job.id} for user {user.id}")
+        
         qr_image_path = os.path.join(QR_CODE_TEMP_DIR_SERVER, f'qrcode_{user.id}.png')
         if os.path.exists(qr_image_path):
             os.remove(qr_image_path)
@@ -722,6 +727,39 @@ def api_trigger_qr_login():
     except Exception as e:
         db.session.rollback()
         return jsonify({"message": f"Gagal memicu proses QR login: {e}"}), 500
+    
+@app.route('/api/cancel_qr_login', methods=['POST'])
+# @login_required
+def api_cancel_qr_login():
+    job_id = session.get('qr_login_job_id')
+    if not job_id:
+        return jsonify({"message": "Tidak ada proses QR yang aktif untuk dibatalkan."}), 404
+
+    try:
+        job = Job.fetch(job_id, connection=redis_conn)
+        job.cancel() # Kirim sinyal pembatalan ke job
+        print(f"Cancel signal sent to Job ID: {job_id}")
+
+        # Juga update status di database untuk menghentikan polling di frontend
+        user = User.query.get(session.get('_user_id'))
+        if user:
+            user.qr_process_active = False
+            db.session.commit()
+            
+        session.pop('qr_login_job_id', None) # Hapus job_id dari sesi
+        
+        return jsonify({"message": "Proses QR berhasil dibatalkan."}), 200
+    except NoSuchJobError:
+        print(f"Job ID {job_id} tidak ditemukan di Redis (mungkin sudah selesai atau gagal).")
+        # Tetap update DB untuk mereset UI
+        user = User.query.get(session.get('_user_id'))
+        if user:
+            user.qr_process_active = False
+            db.session.commit()
+        return jsonify({"message": "Proses tidak ditemukan atau sudah selesai."}), 200
+    except Exception as e:
+        print(f"Error canceling job {job_id}: {e}")
+        return jsonify({"message": "Gagal membatalkan proses."}), 500
 
 # BARU: API Endpoint untuk UI mengambil pengaturan user, termasuk status cookies
 @app.route('/api/user_settings_for_ui', methods=['GET'])

@@ -248,11 +248,32 @@
     }
 
     async function refreshQrCode() {
-        if (!confirm('Anda yakin ingin me-refresh QR Code? Proses login akan dimulai ulang.')) {
+        if (!confirm('Anda yakin ingin memulai ulang proses QR Code? Proses yang sedang berjalan akan dihentikan.')) {
             return;
         }
-        resetQrUi();
-        await startQrLoginProcess();
+
+        stopPolling();
+        loadingText.innerText = 'Membatalkan proses sebelumnya...';
+
+        try {
+            // 2. Kirim permintaan untuk membatalkan job di backend
+            const response = await fetch("{{ url_for('api_cancel_qr_login') }}", {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            const data = await response.json();
+            console.log(data.message);
+            
+            // 3. Reset UI lalu mulai proses baru
+            resetUi();
+            await startQrLoginProcess();
+
+        } catch (error) {
+            alert('Gagal membatalkan proses: ' + error.message);
+            // Tetap coba reset dan mulai ulang
+            resetUi();
+            await startQrLoginProcess();
+        }
     }
 
     async function disconnectTiktok() {
