@@ -185,12 +185,12 @@ def generate_qr_and_wait_for_login(user_id: int): # Sudah benar, tanpa api_clien
         options.add_argument('--no-sandbox') # Diperlukan untuk headless di Linux server
         options.add_argument('--disable-dev-shm-usage') # Mengatasi masalah resource di Docker/VPS
         options.add_argument('--window-size=1280,800') # Tetapkan ukuran jendela yang realistis
-        options.add_argument('--disable-blink-features=AutomationControlled') # Anti-deteksi
+        # options.add_argument('--disable-blink-features=AutomationControlled') # Anti-deteksi
         # options.add_argument(
         #      '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
-        #      'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36'
+        #      'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36'
         # ) # User-Agent yang umum
-        options.add_argument('--disable-setuid-sandbox')
+        options.add_argument('--disable-setuid-sandbox') # browser akan berjalan tanpa batasan hak akses yang diterapkan oleh setuid sandbox. Ini bisa meningkatkan risiko keamanan jika browser terkena serangan.
         options.add_argument('--lang=en-US,en;q=0.9') # Mengatur bahasa browser ke Inggris AS
         driver = uc.Chrome(options=options)
 

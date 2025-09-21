@@ -76,7 +76,7 @@ def get_video_transcript(video_url: str, user_id: int, api_client: APIClient) ->
         try:
             # Memuat model Whisper (pastikan model ini bisa diinstal di VPS Anda)
             # Anda mungkin perlu model yang lebih kecil seperti 'tiny' atau 'base' untuk 2GB RAM
-            model = whisper.load_model("base") # Menggunakan model 'base'
+            model = whisper.load_model("tiny") # Menggunakan model 'base'
             result = whisper.transcribe(model, downloaded_audio_path)
             
             if result and "text" in result:
