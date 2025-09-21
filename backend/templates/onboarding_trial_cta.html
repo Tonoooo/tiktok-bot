@@ -11,7 +11,7 @@
         {# Ini adalah fallback jika entah mengapa user sampai di sini. #}
         <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative mb-6">
             <strong class="font-bold">Selamat!</strong>
-            <span class="block sm:inline">Anda sudah berlangganan Sitono AI. Anda bisa melihat status bot di <a href="{{ url_for('dashboard') }}" class="underline">Dashboard</a>.</span>
+            <span class="block sm:inline">Anda sudah berlangganan Sitono AI. Anda bisa melihat status AI di <a href="{{ url_for('dashboard') }}" class="underline">Dashboard</a>.</span>
         </div>
     {% elif user.onboarding_stage == 'TRIAL_COMPLETED' %}
         {# Status: Uji coba selesai, tampilkan CTA untuk berlangganan #}
@@ -21,8 +21,8 @@
         </div>
         <h2 class="text-2xl font-semibold text-gray-800 mb-4 text-center">Lihat Hasilnya di Akun TikTok Anda!</h2>
         <p class="text-gray-700 mb-6 text-center">
-            Bot telah mencoba membalas beberapa komentar terbaru di video TikTok Shop Anda. Silakan cek hasilnya langsung di aplikasi TikTok Anda.
-            Jika Anda puas dengan hasilnya, saatnya untuk mengaktifkan bot secara penuh!
+            SiTono AI telah mencoba membalas beberapa komentar terbaru di video TikTok Shop Anda. Silakan cek hasilnya langsung di aplikasi TikTok Anda.
+            Jika Anda puas dengan hasilnya, saatnya untuk mengaktifkan AI secara penuh!
         </p>
 
         <div class="bg-blue-50 p-6 rounded-lg shadow-inner text-center mb-6">
@@ -37,23 +37,19 @@
         </div>
 
         <p class="text-sm text-gray-500 text-center mt-6">
-            Dengan berlangganan, bot akan berjalan secara otomatis sesuai jadwal yang Anda atur.
+            Dengan berlangganan, AI akan berjalan secara otomatis sesuai jadwal yang Anda atur.
         </p>
 
     {% elif user.onboarding_stage == 'TRIAL_RUNNING' %}
         {# Status: Bot sedang berjalan untuk uji coba #}
         <div class="bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded relative mb-6 animate-pulse">
             <strong class="font-bold">AI Sedang Bekerja!</strong>
-            <span class="block sm:inline">Bot komentar uji coba Anda sedang berjalan. Ini mungkin memakan waktu beberapa menit.</span>
+            <span class="block sm:inline">Komentar uji coba Anda sedang berjalan. Ini mungkin memakan waktu beberapa puluh menit.</span>
         </div>
         <div class="flex flex-col items-center justify-center p-6 bg-white rounded-lg shadow-md mb-6">
             <div class="animate-spin rounded-full h-20 w-20 border-t-4 border-b-4 border-blue-500 mb-4"></div>
             <p class="text-xl font-semibold text-gray-800">AI Auto-Responder sedang memproses...</p>
-            <p class="text-gray-600 mt-2">Mohon tunggu. Halaman ini akan diperbarui secara otomatis.</p>
         </div>
-        <p class="text-sm text-gray-500 text-center mt-6">
-            Jangan menutup halaman ini atau mematikan komputer Anda hingga proses selesai.
-        </p>
         {# Skrip JavaScript untuk polling status akan ada di bawah #}
 
     {% elif not user.has_used_free_trial %}
@@ -62,7 +58,7 @@
             <strong class="font-bold">Hampir Selesai!</strong>
             <span class="block sm:inline">Anda siap menjalankan uji coba gratis AI Auto-Responder Anda.</span>
         </div>
-        <h2 class="text-2xl font-semibold text-gray-800 mb-4 text-center">Coba Gratis Bot Komentar Anda!</h2>
+        <h2 class="text-2xl font-semibold text-gray-800 mb-4 text-center">Coba Gratis AI Komentar Anda!</h2>
         <p class="text-gray-700 mb-6 text-center">
             Dapatkan pengalaman langsung bagaimana Sitono AI bekerja. Sitono AI akan membalas beberapa komentar terbaru di video TikTok Shop Anda secara otomatis.
             Uji coba ini hanya bisa dilakukan sekali.
@@ -157,7 +153,7 @@
     }
 
     async function runFreeTrialBot() {
-        if (!confirm('Anda yakin ingin menjalankan uji coba gratis bot komentar? Ini hanya bisa dilakukan sekali.')) {
+        if (!confirm('Anda yakin ingin menjalankan uji coba gratis AI komentar? Ini hanya bisa dilakukan sekali.')) {
             return;
         }
 
@@ -185,7 +181,7 @@
                 // Atau lebih sederhana, reload halaman agar middleware Flask yang mengatur tampilan
                 window.location.reload(); 
             } else {
-                alert('Gagal menjalankan uji coba bot: ' + data.message);
+                alert('Gagal menjalankan uji coba AI: ' + data.message);
                 document.getElementById('run-trial-button').disabled = false;
                 document.getElementById('run-trial-button').innerText = 'Jalankan Uji Coba Gratis Sekarang (1x)';
             }

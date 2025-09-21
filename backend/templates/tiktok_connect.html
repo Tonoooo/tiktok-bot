@@ -198,7 +198,7 @@
             if (!response.ok) throw new Error("Gagal memulai proses di server.");
             const data = await response.json();
             
-            loadingText.innerText = 'Menunggu QR Code dari bot...';
+            loadingText.innerText = 'Menunggu QR Code...';
             startPolling();
 
         } catch (error) {
