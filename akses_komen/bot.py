@@ -30,7 +30,7 @@ class element_attribute_is(object):
         except:
             return False
 
-def run_tiktok_bot_task(user_id: int): # PERUBAHAN: Hapus api_client dari signature
+def run_tiktok_bot_task(user_id: int, is_trial_run: bool = False):
     print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] Memulai tugas bot untuk user ID: {user_id}")
     driver = None
     api_client = None # BARU: Inisialisasi api_client di sini
