@@ -12,6 +12,7 @@ from selenium.common.exceptions import TimeoutException, WebDriverException, NoS
 from akses_komen.api_client import APIClient 
 from datetime import datetime
 from datetime import timedelta
+from rq import get_current_job
 
 VPS_API_BASE_URL = os.getenv('VPS_API_BASE_URL', "http://103.52.114.253:5000") # Sesuaikan dengan IP VPS Anda
 API_BOT_KEY = os.getenv('API_BOT_KEY', "super_secret_bot_key_123") # Sesuaikan dengan API Key Anda
@@ -141,6 +142,22 @@ def generate_qr_and_wait_for_login(user_id: int): # Sudah benar, tanpa api_clien
     # Ini sudah benar, APIClient diinisialisasi di sini
     api_client = APIClient(VPS_API_BASE_URL, API_BOT_KEY)
     
+    # --- PERUBAHAN 1: DAPATKAN JOB ID SAAT INI DAN KONEKSI REDIS ---
+    current_job = get_current_job()
+    if not current_job:
+        print("ERROR: Tidak dapat mendapatkan job saat ini dari konteks RQ.")
+        return False
+
+    redis_conn = current_job.connection
+    lock_key = f"qr_job_lock:{user_id}"
+
+    # --- PERUBAHAN 2: CEK KUNCI DI AWAL ---
+    # Verifikasi bahwa job ini adalah yang seharusnya berjalan
+    active_job_id = redis_conn.get(lock_key)
+    if active_job_id and active_job_id.decode('utf-8') != current_job.id:
+        print(f"STOP: Proses lain ({active_job_id.decode('utf-8')}) sedang aktif untuk user {user_id}. Job {current_job.id} ini dibatalkan.")
+        return False # Berhenti jika ada job lain yang memegang kunci
+    
     driver = None
     qr_image_path = os.path.join(QR_CODE_TEMP_DIR, f'qrcode_{user_id}.png')
     
@@ -258,6 +275,12 @@ def generate_qr_and_wait_for_login(user_id: int): # Sudah benar, tanpa api_clien
 
         # --- Loop untuk terus-menerus mendeteksi status login ---
         while (time.time() - start_time) < MAX_LOGIN_WAIT_TIME:
+            # --- CEK KUNCI DI DALAM LOOP ---
+            active_job_id_in_loop = redis_conn.get(lock_key)
+            if not active_job_id_in_loop or active_job_id_in_loop.decode('utf-8') != current_job.id:
+                print(f"STOP: Kunci untuk user {user_id} telah dihapus atau diambil alih. Job {current_job.id} ini berhenti.")
+                raise Exception("Process superseded by another job.") # Keluar dari loop
+            
             current_time = time.time()
 
             # --- Ambil data QR code terbaru dari canvas (untuk visualisasi di frontend) ---
@@ -385,8 +408,13 @@ def generate_qr_and_wait_for_login(user_id: int): # Sudah benar, tanpa api_clien
     finally:
         if driver:
             driver.quit()
-            print(f"[{datetime.now()}] WebDriver ditutup untuk user {user_id}.")
+
+        # --- HAPUS KUNCI DI AKHIR ---
+        final_lock_holder = redis_conn.get(lock_key)
+        if final_lock_holder and final_lock_holder.decode('utf-8') == current_job.id:
+            redis_conn.delete(lock_key)
+            print(f"Redis lock untuk user {user_id} dilepaskan oleh job {current_job.id}.")
+
         if os.path.exists(qr_image_path):
             os.remove(qr_image_path)
-            print(f"[{datetime.now()}] QR code lokal untuk user {user_id} dihapus.")
         print(f"[{datetime.now()}] Tugas generate_qr_and_wait_for_login untuk user_id: {user_id} selesai.")

@@ -695,71 +695,74 @@ def api_disconnect_tiktok():
         return jsonify({"message": f"Gagal memutuskan koneksi TikTok: {e}"}), 500
 
 @app.route('/api/trigger_qr_login', methods=['POST'])
-# @login_required
 def api_trigger_qr_login():
     user = User.query.get(session.get('_user_id'))
     if not user:
         return jsonify({"message": "User tidak ditemukan."}), 404
-    
-    # HANYA izinkan trigger QR jika user dalam tahap onboarding TIKTOK_CONNECT_PENDING
-    # atau sudah subscribed (untuk re-connect)
-    if not (user.onboarding_stage == 'TIKTOK_CONNECT_PENDING' or user.is_subscribed or user.is_admin):
-        return jsonify({"message": "Akses ditolak. Tahap onboarding tidak sesuai atau belum berlangganan."}), 403
+
+    # 1. Cek apakah sudah ada job_id lama di sesi
+    old_job_id = session.get('qr_login_job_id')
+    if old_job_id:
+        print(f"Job lama {old_job_id} ditemukan di sesi. Mencoba membatalkan sebelum memulai yang baru.")
+        try:
+            old_job = Job.fetch(old_job_id, connection=redis_conn)
+            old_job.cancel()
+        except NoSuchJobError:
+            print(f"Job lama {old_job_id} tidak ditemukan di Redis.")
 
     try:
         user.qr_process_active = True
         user.qr_generated_at = None
         user.cookies_json = json.dumps([])
-
-        db.session.add(user)
         db.session.commit()
-        
+
         job = enqueue_qr_login_task(user.id)
         session['qr_login_job_id'] = job.id
-        print(f"QR login task enqueued with Job ID: {job.id} for user {user.id}")
-        
+
+        # --- LOGIKA KUNCI BARU ---
+        # 2. Set kunci di Redis dengan job_id yang baru
+        redis_conn.set(f"qr_job_lock:{user.id}", job.id, ex=MAX_LOGIN_WAIT_TIME)
+        print(f"Redis lock diatur untuk user {user.id} dengan Job ID: {job.id}")
+        # --- LOGIKA KUNCI SELESAI ---
+
         qr_image_path = os.path.join(QR_CODE_TEMP_DIR_SERVER, f'qrcode_{user.id}.png')
         if os.path.exists(qr_image_path):
             os.remove(qr_image_path)
-            print(f"QR code lama untuk user {user.id} dihapus dari VPS.")
-        
-        return jsonify({"message": "Proses QR login akan dimulai. Mohon tunggu beberapa saat untuk QR code baru muncul."}), 200
+
+        return jsonify({"message": "Proses QR login akan dimulai."}), 200
     except Exception as e:
         db.session.rollback()
         return jsonify({"message": f"Gagal memicu proses QR login: {e}"}), 500
+
     
 @app.route('/api/cancel_qr_login', methods=['POST'])
-# @login_required
 def api_cancel_qr_login():
     job_id = session.get('qr_login_job_id')
+    user_id = session.get('_user_id')
     if not job_id:
         return jsonify({"message": "Tidak ada proses QR yang aktif untuk dibatalkan."}), 404
 
     try:
         job = Job.fetch(job_id, connection=redis_conn)
-        job.cancel() # Kirim sinyal pembatalan ke job
+        job.cancel()
         print(f"Cancel signal sent to Job ID: {job_id}")
-
-        # Juga update status di database untuk menghentikan polling di frontend
-        user = User.query.get(session.get('_user_id'))
-        if user:
-            user.qr_process_active = False
-            db.session.commit()
-            
-        session.pop('qr_login_job_id', None) # Hapus job_id dari sesi
-        
-        return jsonify({"message": "Proses QR berhasil dibatalkan."}), 200
     except NoSuchJobError:
-        print(f"Job ID {job_id} tidak ditemukan di Redis (mungkin sudah selesai atau gagal).")
-        # Tetap update DB untuk mereset UI
-        user = User.query.get(session.get('_user_id'))
-        if user:
-            user.qr_process_active = False
-            db.session.commit()
-        return jsonify({"message": "Proses tidak ditemukan atau sudah selesai."}), 200
+        print(f"Job ID {job_id} tidak ditemukan di Redis.")
     except Exception as e:
         print(f"Error canceling job {job_id}: {e}")
-        return jsonify({"message": "Gagal membatalkan proses."}), 500
+    finally:
+        # 3. Hapus kunci dari Redis saat dibatalkan
+        redis_conn.delete(f"qr_job_lock:{user_id}")
+        print(f"Redis lock untuk user {user_id} dihapus.")
+        # --- LOGIKA KUNCI SELESAI ---
+
+        user = User.query.get(user_id)
+        if user:
+            user.qr_process_active = False
+            db.session.commit()
+        session.pop('qr_login_job_id', None)
+
+    return jsonify({"message": "Proses QR berhasil dibatalkan."}), 200
 
 # BARU: API Endpoint untuk UI mengambil pengaturan user, termasuk status cookies
 @app.route('/api/user_settings_for_ui', methods=['GET'])
