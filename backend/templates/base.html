@@ -18,6 +18,15 @@
             <div>
                 {% if current_user.is_authenticated %}
                     <span class="text-gray-700 mr-4">Halo, {{ current_user.username }}!</span>
+            
+                    {# -- TAMBAHKAN BLOK INI -- #}
+                    {% if current_user.is_admin %}
+                        <a href="{{ url_for('admin_dashboard') }}" class="bg-purple-500 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded mr-2">
+                            Admin Panel
+                        </a>
+                    {% endif %}
+                    {# -- BATAS AKHIR -- #}
+            
                     <a href="{{ url_for('logout') }}" class="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded">Keluar</a>
                 {% else %}
                     <a href="{{ url_for('login') }}" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded mr-2">Masuk</a>

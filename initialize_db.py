@@ -55,7 +55,7 @@ with app.app_context():
     hashed_password = generate_password_hash("123456789")
 
     # Cek apakah user sudah ada untuk mencegah duplikasi jika script dijalankan berkali-kali
-    if not User.query.filter_by(username='admin').first():
+    if not User.query.filter_by(username='cozy').first():
         user1 = User(
             username='cozy', 
             email='balanjan.id.pusat@gmail.com', 
@@ -68,26 +68,27 @@ with app.app_context():
             cookies_json=json.dumps([]) # Default: list kosong untuk cookies
         )
         db.session.add(user1)
-        db.session.commit() # Commit user dulu untuk mendapatkan ID
         print("User 'cozy' (dengan pengaturan creator) ditambahkan.")
     else:
         user1 = User.query.filter_by(username='cozy').first()
         print("User 'cozy' sudah ada.")
 
-    # --- Contoh data ProcessedVideo (Opsional, untuk testing) ---
-    # Jika Anda ingin menambahkan contoh video yang sudah diproses secara manual
-    # Uncomment blok di bawah ini dan sesuaikan
-    # if not ProcessedVideo.query.filter_by(video_url='https://www.tiktok.com/@cozy_kilo/video/12345').first():
-    #     sample_video = ProcessedVideo(
-    #         user_id=user1.id,
-    #         video_url='https://www.tiktok.com/@cozy_kilo/video/12345',
-    #         transcript='Ini adalah contoh transkrip video.',
-    #         processed_at=datetime.utcnow()
-    #     )
-    #     db.session.add(sample_video)
-    #     db.session.commit()
-    #     print("Contoh ProcessedVideo ditambahkan.")
-    # else:
-    #     print("Contoh ProcessedVideo sudah ada.")
+    # Cek apakah admin sudah ada
+    if not User.query.filter_by(username='admin').first():
+        admin_password = generate_password_hash("admin12345") # Ganti dengan password yang aman
+        admin_user = User(
+            username='admin',
+            email='admin@sitono.online', # Ganti dengan email admin Anda
+            password_hash=admin_password,
+            is_admin=True,
+            is_active=True,
+            is_subscribed=True, # Admin dianggap sudah berlangganan
+            onboarding_stage='SUBSCRIBED' # Admin langsung ke tahap akhir
+        )
+        db.session.add(admin_user)
+        print("User 'admin' berhasil ditambahkan.")
+    else:
+        print("User 'admin' sudah ada.")
     
+    db.session.commit()
     print("Database siap. Anda bisa menambahkan data melalui script atau API.")

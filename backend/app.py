@@ -1429,6 +1429,49 @@ def get_active_users_for_bot():
     except Exception as e:
         print(f"ERROR: Gagal mengambil daftar user aktif untuk bot: {e}")
         return jsonify({"message": f"Error fetching active users for bot: {e}"}), 500
+    
+# ===============================================
+# ADMIN ROUTES
+# ===============================================
+@app.route('/admin')
+@login_required
+def admin_dashboard():
+    if not current_user.is_admin:
+        flash('Anda tidak memiliki akses ke halaman ini.', 'danger')
+        return redirect(url_for('dashboard'))
+    return render_template('admin/dashboard.html')
+
+# ... (di bawah @app.route('/admin')) ...
+
+@app.route('/admin/users')
+@login_required
+def admin_users():
+    if not current_user.is_admin:
+        flash('Anda tidak memiliki akses ke halaman ini.', 'danger')
+        return redirect(url_for('dashboard'))
+    
+    users = User.query.all()
+    return render_template('admin/users.html', users=users)
+
+@app.route('/admin/user/<int:user_id>/edit', methods=['GET', 'POST'])
+@login_required
+def admin_edit_user(user_id):
+    if not current_user.is_admin:
+        flash('Anda tidak memiliki akses ke halaman ini.', 'danger')
+        return redirect(url_for('dashboard'))
+
+    user_to_edit = User.query.get_or_404(user_id)
+    if request.method == 'POST':
+        # Ambil data dari form dan perbarui statusnya
+        user_to_edit.is_subscribed = 'is_subscribed' in request.form
+        user_to_edit.is_active = 'is_active' in request.form
+        user_to_edit.is_admin = 'is_admin' in request.form
+        
+        db.session.commit()
+        flash(f'User {user_to_edit.username} berhasil diperbarui.', 'success')
+        return redirect(url_for('admin_users'))
+
+    return render_template('admin/edit_user.html', user=user_to_edit)
 
 if __name__ == '__main__':
     print(f"Aplikasi Flask akan menggunakan database di: {db_path}") 

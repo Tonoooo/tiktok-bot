@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Pengguna: {{ user.username }}{% endblock %}
+
+{% block content %}
+<div class="container mx-auto p-4 max-w-lg">
+    <h1 class="text-3xl font-bold text-gray-900 mb-6">Edit Pengguna: {{ user.username }}</h1>
+
+    <div class="bg-white p-8 rounded-lg shadow-md">
+        <form method="POST">
+            <div class="space-y-6">
+                <div class="relative flex items-start">
+                    <div class="flex items-center h-5">
+                        <input id="is_admin" name="is_admin" type="checkbox" class="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 rounded" {% if user.is_admin %}checked{% endif %}>
+                    </div>
+                    <div class="ml-3 text-sm">
+                        <label for="is_admin" class="font-medium text-gray-700">Jadikan Admin</label>
+                        <p class="text-gray-500">Memberikan akses penuh ke panel admin.</p>
+                    </div>
+                </div>
+
+                <div class="relative flex items-start">
+                    <div class="flex items-center h-5">
+                        <input id="is_subscribed" name="is_subscribed" type="checkbox" class="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 rounded" {% if user.is_subscribed %}checked{% endif %}>
+                    </div>
+                    <div class="ml-3 text-sm">
+                        <label for="is_subscribed" class="font-medium text-gray-700">Status Berlangganan (Subscribed)</label>
+                        <p class="text-gray-500">Aktifkan status ini jika pengguna sudah melakukan pembayaran.</p>
+                    </div>
+                </div>
+
+                <div class="relative flex items-start">
+                    <div class="flex items-center h-5">
+                        <input id="is_active" name="is_active" type="checkbox" class="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 rounded" {% if user.is_active %}checked{% endif %}>
+                    </div>
+                    <div class="ml-3 text-sm">
+                        <label for="is_active" class="font-medium text-gray-700">Bot Aktif (Active)</label>
+                        <p class="text-gray-500">Izinkan bot komentar untuk berjalan pada akun pengguna ini (jika sudah berlangganan).</p>
+                    </div>
+                </div>
+            </div>
+            <div class="mt-8 pt-5">
+                <div class="flex justify-end">
+                    <a href="{{ url_for('admin_users') }}" class="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50">
+                        Batal
+                    </a>
+                    <button type="submit" class="ml-3 inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700">
+                        Simpan Perubahan
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
