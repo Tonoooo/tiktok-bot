@@ -24,6 +24,8 @@ import io # Untuk memproses gambar QR
 
 from rq.job import Job
 from rq.exceptions import NoSuchJobError
+from akses_komen.qr_login_service import MAX_LOGIN_WAIT_TIME
+
 
 # Secara eksplisit tambahkan direktori proyek ke sys.path
 # Ini memastikan Python dapat menemukan 'backend' sebagai paket.
@@ -700,7 +702,12 @@ def api_trigger_qr_login():
     if not user:
         return jsonify({"message": "User tidak ditemukan."}), 404
 
-    # 1. Cek apakah sudah ada job_id lama di sesi
+    # === PENGECEKAN IZIN YANG DIPERBAIKI ===
+    allowed_stages = ['TIKTOK_CONNECT_PENDING', 'TRIAL_CTA']
+    if not (user.onboarding_stage in allowed_stages or user.is_subscribed or user.is_admin):
+        return jsonify({"message": "Akses ditolak. Tahap onboarding tidak sesuai atau belum berlangganan."}), 403
+
+    # 1. Cek dan batalkan job lama jika ada
     old_job_id = session.get('qr_login_job_id')
     if old_job_id:
         print(f"Job lama {old_job_id} ditemukan di sesi. Mencoba membatalkan sebelum memulai yang baru.")
@@ -719,12 +726,10 @@ def api_trigger_qr_login():
         job = enqueue_qr_login_task(user.id)
         session['qr_login_job_id'] = job.id
 
-        # --- LOGIKA KUNCI BARU ---
-        # 2. Set kunci di Redis dengan job_id yang baru
+        # 2. Set kunci di Redis dengan job_id yang baru (sekarang dengan MAX_LOGIN_WAIT_TIME yang benar)
         redis_conn.set(f"qr_job_lock:{user.id}", job.id, ex=MAX_LOGIN_WAIT_TIME)
         print(f"Redis lock diatur untuk user {user.id} dengan Job ID: {job.id}")
-        # --- LOGIKA KUNCI SELESAI ---
-
+        
         qr_image_path = os.path.join(QR_CODE_TEMP_DIR_SERVER, f'qrcode_{user.id}.png')
         if os.path.exists(qr_image_path):
             os.remove(qr_image_path)
@@ -732,6 +737,8 @@ def api_trigger_qr_login():
         return jsonify({"message": "Proses QR login akan dimulai."}), 200
     except Exception as e:
         db.session.rollback()
+        # Berikan pesan error yang lebih spesifik untuk debugging
+        print(f"ERROR saat memicu QR login: {e}")
         return jsonify({"message": f"Gagal memicu proses QR login: {e}"}), 500
 
     
