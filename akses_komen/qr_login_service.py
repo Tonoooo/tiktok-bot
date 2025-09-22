@@ -203,28 +203,28 @@ def generate_qr_and_wait_for_login(user_id: int): # Sudah benar, tanpa api_clien
         #     "profile.password_manager_enabled": False,
         # })
         
-        # xxxx menyebabakan error xxxxx     options.add_argument('--disable-web-security')  # Bypass kebijakan same-origin :cite[9]
+        options.add_argument('--disable-web-security')  # Bypass kebijakan same-origin :cite[9] # 0.26
         # xxxx   menyebabkan captcha     xxxx  options.add_argument('--disable-features=VizDisplayCompositor')  # Nonaktifkan fitur yang bisa dideteks
         options.add_argument("--disable-features=IsolateOrigins,site-per-process")
-        # xxxx   menyebabkan captcha     xxxx  options.add_argument("--disable-site-isolation-trials")
-        # options.add_argument("--allow-running-insecure-content")
-        # options.add_argument("--disable-renderer-backgrounding")
-        # options.add_argument("--disable-background-timer-throttling")
-        # options.add_argument("--disable-backgrounding-occluded-windows")
-        # options.add_argument("--disable-client-side-phishing-detection")
-        # options.add_argument("--disable-component-extensions-with-background-pages")
-        # options.add_argument("--disable-default-apps")
-        # options.add_argument("--disable-hang-monitor")
-        # options.add_argument("--disable-ipc-flooding-protection")
-        # options.add_argument("--disable-prompt-on-repost")
-        # options.add_argument("--disable-sync")
-        # options.add_argument("--disable-translate")
-        # options.add_argument("--metrics-recording-only")
-        # options.add_argument("--no-first-run")
-        # options.add_argument("--safebrowsing-disable-auto-update")
+        options.add_argument("--disable-site-isolation-trials")
+        options.add_argument("--allow-running-insecure-content") # 0:45
+        options.add_argument("--disable-renderer-backgrounding") # 0:36
+        options.add_argument("--disable-background-timer-throttling")# 1:10
+        options.add_argument("--disable-backgrounding-occluded-windows") # 0:39
+        options.add_argument("--disable-client-side-phishing-detection") # 1:33
+        options.add_argument("--disable-component-extensions-with-background-pages") # 0.27
+        options.add_argument("--disable-default-apps") # 0.30
+        options.add_argument("--disable-hang-monitor") # 0.39
+        options.add_argument("--disable-ipc-flooding-protection") # 0.31
+        options.add_argument("--disable-prompt-on-repost") # 0.36
+        options.add_argument("--disable-sync")
+        options.add_argument("--disable-translate") # 0.48
+        options.add_argument("--metrics-recording-only") # 0.53
+        options.add_argument("--no-first-run")
+        options.add_argument("--safebrowsing-disable-auto-update") # 0.28
         # xxxx terdeteksi sofware automati  xxxxx   options.add_argument("--enable-automation")
-        # options.add_argument("--password-store=basic")
-        # options.add_argument("--use-mock-keychain")
+        options.add_argument("--password-store=basic")
+        options.add_argument("--use-mock-keychain") # 0.20
         
 
         driver = uc.Chrome(options=options)
