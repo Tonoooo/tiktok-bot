@@ -60,7 +60,7 @@ with app.app_context():
             username='kokokekek805', 
             email='kekek2553@gmail.com', 
             password_hash=hashed_password,
-            tiktok_username='kokokekek805', # Digabung dari CreatorSettings
+            tiktok_username='kokokeke805', # Digabung dari CreatorSettings
             creator_character_description='pria, usia 20-an, tegas, suka humor, sering menggunakan kata "mantap"', # Digabung
             is_active=True, # Digabung
             daily_run_count=0, # Digabung

@@ -189,22 +189,43 @@ def generate_qr_and_wait_for_login(user_id: int): # Sudah benar, tanpa api_clien
         options.add_argument('--start-maximized')
         
         options.add_argument('--disable-blink-features=AutomationControlled') # Anti-deteksi
-        options.add_argument(
-             '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
-             'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36'
-        ) # User-Agent yang umum
+        # user agent sangat menyebabkan verifikasi captcha
         options.add_argument('--lang=en-US,en;q=0.9') # Mengatur bahasa browser ke Inggris AS
         
-        options.add_argument('--disable-setuid-sandbox') # browser akan berjalan tanpa batasan hak akses yang diterapkan oleh setuid sandbox. Ini bisa meningkatkan risiko keamanan jika browser terkena serangan.
-        options.add_argument('--disable-extensions')
-        options.add_argument('--disable-popup-blocking')
+        # xxxx   disable setuit sandbox menyebabkan captcha     xxxx options.add_argument('--disable-setuid-sandbox') # browser akan berjalan tanpa batasan hak akses yang diterapkan oleh setuid sandbox. Ini bisa meningkatkan risiko keamanan jika browser terkena serangan.
+        # xxxx   disable ini menyebabkan captcha     xxxx options.add_argument('--disable-extensions')
+        # xxxx   menyebabkan captcha     xxxx options.add_argument('--disable-popup-blocking')
         options.add_argument('--ignore-certificate-errors')
-        options.add_experimental_option("excludeSwitches", ["enable-automation"])
-        options.add_experimental_option('useAutomationExtension', False)
-        options.add_experimental_option('prefs', {
-            "credentials_enable_service": False,
-            "profile.password_manager_enabled": False,
-        })
+        # error   xxxxx    options.add_experimental_option("excludeSwitches", ["enable-automation"])
+        # error   xxxxx    options.add_experimental_option('useAutomationExtension', False)
+        #  xxxx   menyebabkan captcha     xxxx  options.add_experimental_option('prefs', {
+        #     "credentials_enable_service": False,
+        #     "profile.password_manager_enabled": False,
+        # })
+        
+        # xxxx menyebabakan error xxxxx     options.add_argument('--disable-web-security')  # Bypass kebijakan same-origin :cite[9]
+        # xxxx   menyebabkan captcha     xxxx  options.add_argument('--disable-features=VizDisplayCompositor')  # Nonaktifkan fitur yang bisa dideteks
+        options.add_argument("--disable-features=IsolateOrigins,site-per-process")
+        # xxxx   menyebabkan captcha     xxxx  options.add_argument("--disable-site-isolation-trials")
+        # options.add_argument("--allow-running-insecure-content")
+        # options.add_argument("--disable-renderer-backgrounding")
+        # options.add_argument("--disable-background-timer-throttling")
+        # options.add_argument("--disable-backgrounding-occluded-windows")
+        # options.add_argument("--disable-client-side-phishing-detection")
+        # options.add_argument("--disable-component-extensions-with-background-pages")
+        # options.add_argument("--disable-default-apps")
+        # options.add_argument("--disable-hang-monitor")
+        # options.add_argument("--disable-ipc-flooding-protection")
+        # options.add_argument("--disable-prompt-on-repost")
+        # options.add_argument("--disable-sync")
+        # options.add_argument("--disable-translate")
+        # options.add_argument("--metrics-recording-only")
+        # options.add_argument("--no-first-run")
+        # options.add_argument("--safebrowsing-disable-auto-update")
+        # xxxx terdeteksi sofware automati  xxxxx   options.add_argument("--enable-automation")
+        # options.add_argument("--password-store=basic")
+        # options.add_argument("--use-mock-keychain")
+        
 
         driver = uc.Chrome(options=options)
 
