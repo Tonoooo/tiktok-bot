@@ -15,6 +15,8 @@ from akses_komen.api_client import APIClient
 from akses_komen.transcription_service import get_video_transcript
 from akses_komen.llm_service import generate_ai_reply
 
+from akses_komen.captcha_solver import solve_captcha
+
 PROFILES_DIR = 'browser_profiles'
 
 class element_attribute_is(object):
@@ -236,6 +238,13 @@ def run_tiktok_bot_task(user_id: int, is_trial_run: bool = False):
         driver.get(target_url)
         print(f"Navigasi ke: {target_url}")
         time.sleep(5)
+        
+        # Cek dan selesaikan captcha jika muncul setelah membuka halaman
+        print("Memeriksa halaman untuk captcha setelah navigasi awal...")
+        if not solve_captcha(driver):
+            print("Gagal menyelesaikan captcha awal. Menghentikan bot.")
+            return # Hentikan eksekusi jika captcha tidak bisa diselesaikan
+        print("Pengecekan captcha awal selesai.")
 
         # Muat cookies
         # for cookie in cookies:
