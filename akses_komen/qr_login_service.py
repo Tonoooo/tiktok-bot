@@ -8,7 +8,6 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, WebDriverException, NoSuchElementException, ElementNotInteractableException, StaleElementReferenceException 
 
-# PERUBAHAN: Ganti import Flask, db, User dengan APIClient
 from akses_komen.api_client import APIClient 
 from datetime import datetime
 from datetime import timedelta
@@ -20,6 +19,9 @@ API_BOT_KEY = os.getenv('API_BOT_KEY', "super_secret_bot_key_123") # Sesuaikan d
 
 QR_CODE_TEMP_DIR = 'qr_codes_temp'
 os.makedirs(QR_CODE_TEMP_DIR, exist_ok=True)
+
+PROFILES_DIR = 'browser_profiles'
+os.makedirs(PROFILES_DIR, exist_ok=True)
 
 MAX_LOGIN_WAIT_TIME = 600 # detik (total 10 menit)
 QR_SCREENSHOT_INTERVAL = 10
@@ -142,7 +144,6 @@ def generate_qr_and_wait_for_login(user_id: int): # Sudah benar, tanpa api_clien
     # Ini sudah benar, APIClient diinisialisasi di sini
     api_client = APIClient(VPS_API_BASE_URL, API_BOT_KEY)
     
-    # --- PERUBAHAN 1: DAPATKAN JOB ID SAAT INI DAN KONEKSI REDIS ---
     current_job = get_current_job()
     if not current_job:
         print("ERROR: Tidak dapat mendapatkan job saat ini dari konteks RQ.")
@@ -176,17 +177,22 @@ def generate_qr_and_wait_for_login(user_id: int): # Sudah benar, tanpa api_clien
     
 
     try:
+        
+        # Tentukan path unik untuk profil pengguna ini
+        user_profile_path = os.path.abspath(os.path.join(PROFILES_DIR, f'user_{user_id}'))
+        print(f"Menggunakan path profil peramban: {user_profile_path}")
+        
         # =========================
         # STEALTH HEADLESS OPTIONS
         # =========================
         options = uc.ChromeOptions()
-        # options.add_argument('--headless') # Jalankan browser tanpa GUI
+        # options.add_argument('--headless') 
         
         options.add_argument('--disable-gpu') # Diperlukan untuk headless di beberapa sistem
         options.add_argument('--no-sandbox') # Diperlukan untuk headless di Linux server
         options.add_argument('--disable-dev-shm-usage') # Mengatasi masalah resource di Docker/VPS
-        options.add_argument('--window-size=1280,800') # Tetapkan ukuran jendela yang realistis
-        options.add_argument('--start-maximized')
+        options.add_argument('--window-size=1366,768') 
+        options.add_argument('--start-maximized')  
         
         options.add_argument('--disable-blink-features=AutomationControlled') # Anti-deteksi
         # user agent sangat menyebabkan verifikasi captcha
@@ -196,12 +202,6 @@ def generate_qr_and_wait_for_login(user_id: int): # Sudah benar, tanpa api_clien
         # xxxx   disable ini menyebabkan captcha     xxxx options.add_argument('--disable-extensions')
         # xxxx   menyebabkan captcha     xxxx options.add_argument('--disable-popup-blocking')
         options.add_argument('--ignore-certificate-errors')
-        # error   xxxxx    options.add_experimental_option("excludeSwitches", ["enable-automation"])
-        # error   xxxxx    options.add_experimental_option('useAutomationExtension', False)
-        #  xxxx   menyebabkan captcha     xxxx  options.add_experimental_option('prefs', {
-        #     "credentials_enable_service": False,
-        #     "profile.password_manager_enabled": False,
-        # })
         
         options.add_argument('--disable-web-security')  # Bypass kebijakan same-origin :cite[9] # 0.26
         # xxxx   menyebabkan captcha     xxxx  options.add_argument('--disable-features=VizDisplayCompositor')  # Nonaktifkan fitur yang bisa dideteks
@@ -226,8 +226,88 @@ def generate_qr_and_wait_for_login(user_id: int): # Sudah benar, tanpa api_clien
         options.add_argument("--password-store=basic")
         options.add_argument("--use-mock-keychain") # 0.20
         
+        
+        windows_ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
+        # options.add_argument(f'--user-agent={windows_ua}')
+        # options.add_argument('--sec-ch-ua-platform="Windows"')
+        # options.add_argument('--sec-ch-ua-mobile=?0')
+        options.add_argument('--timezone=Asia/Jakarta')
+        options.add_argument('--lang=en-US,en;q=0.9,id;q=0.8')
+        
+        options.add_argument(f'--user-data-dir={user_profile_path}')   
 
         driver = uc.Chrome(options=options)
+        
+        platform_override_script = """
+            // === DEEPLY EMBEDDED PLATFORM OVERRIDE ===
+            
+            // 1. Navigator platform override (MOST CRITICAL)
+            const originalPlatform = Object.getOwnPropertyDescriptor(Navigator.prototype, 'platform');
+            Object.defineProperty(navigator, 'platform', {
+                get: () => 'Win32',
+                configurable: true,
+                enumerable: true
+            });
+            
+            // 2. User agent consistency
+            Object.defineProperty(navigator, 'userAgent', {
+                get: () => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36',
+                configurable: true
+            });
+            
+            // 3. OSCpu override (Firefox legacy, but some sites check)
+            Object.defineProperty(navigator, 'oscpu', {
+                get: () => 'Windows NT 10.0',
+                configurable: true
+            });
+            
+            // 4. Vendor override
+            Object.defineProperty(navigator, 'vendor', {
+                get: () => 'Google Inc.',
+                configurable: true
+            });
+            
+            // 5. Language preferences
+            Object.defineProperty(navigator, 'language', {
+                get: () => 'en-US'
+            });
+            
+            Object.defineProperty(navigator, 'languages', {
+                get: () => ['en-US', 'en', 'id']
+            });
+            
+            // 6. Hardened webdriver detection removal
+            Object.defineProperty(navigator, 'webdriver', {
+                get: () => undefined,
+                set: (val) => {},
+                configurable: true
+            });
+            
+            // 7. Chrome runtime spoofing
+            if (!window.chrome) {
+                window.chrome = {};
+            }
+            
+            if (!window.chrome.runtime) {
+                window.chrome.runtime = {
+                    id: 'dummy',
+                    getURL: () => '',
+                    connect: () => ({})
+                };
+            }
+            
+            // 8. Performance timing spoofing (Linux vs Windows differences)
+            const originalTime = performance.now;
+            performance.now = function() {
+                const time = originalTime.apply(performance, arguments);
+                // Add small random variance to mimic Windows performance characteristics
+                return time + Math.random() * 2;
+            };
+            
+            console.log('✅ Comprehensive Windows platform override injected');
+            """
+            
+        driver.execute_script(platform_override_script)
 
         print(f"WebDriver berhasil diinisialisasi untuk user {user_id}.") 
 

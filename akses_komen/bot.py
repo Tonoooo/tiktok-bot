@@ -15,6 +15,8 @@ from akses_komen.api_client import APIClient
 from akses_komen.transcription_service import get_video_transcript
 from akses_komen.llm_service import generate_ai_reply
 
+PROFILES_DIR = 'browser_profiles'
+
 class element_attribute_is(object):
     def __init__(self, locator, attribute, value):
         self.locator = locator
@@ -89,28 +91,145 @@ def run_tiktok_bot_task(user_id: int, is_trial_run: bool = False):
             return
         
         # ------------- Memuat cookies dari user_settings yang didapat dari API -------------
-        cookies = json.loads(cookies_json)
-        if not cookies:
-            print(f"Peringatan: Cookies JSON kosong untuk user {user_id}. Login mungkin diperlukan lagi.")
-            return # Tidak bisa melanjutkan tanpa cookies
+        # cookies = json.loads(cookies_json)
+        # if not cookies:
+        #     print(f"Peringatan: Cookies JSON kosong untuk user {user_id}. Login mungkin diperlukan lagi.")
+        #     return # Tidak bisa melanjutkan tanpa cookies
+        
+        user_profile_path = os.path.abspath(os.path.join(PROFILES_DIR, f'user_{user_id}'))
+        print(f"Memuat profil peramban dari: {user_profile_path}")
+        
+        if not os.path.exists(user_profile_path):
+            print(f"ERROR: Direktori profil untuk user {user_id} tidak ditemukan. Jalankan Bot QR terlebih dahulu.")
+            return
 
         # =========================
         # STEALTH HEADLESS OPTIONS
         # =========================
         options = uc.ChromeOptions()
         # options.add_argument('--headless') 
-        options.add_argument('--disable-gpu')
-        options.add_argument('--no-sandbox')
-        options.add_argument('--disable-dev-shm-usage')
-        options.add_argument('--window-size=1280,800')
-        options.add_argument('--disable-blink-features=AutomationControlled')
-        # options.add_argument(
-        #      '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
-        #      'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36'
-        # ) # User-Agent yang umum
-        options.add_argument('--disable-setuid-sandbox')
-        options.add_argument('--lang=en-US,en;q=0.9')
+        
+        options.add_argument('--disable-gpu') # Diperlukan untuk headless di beberapa sistem
+        options.add_argument('--no-sandbox') # Diperlukan untuk headless di Linux server
+        options.add_argument('--disable-dev-shm-usage') # Mengatasi masalah resource di Docker/VPS
+        options.add_argument('--window-size=1366,768') 
+        options.add_argument('--start-maximized')  
+        
+        options.add_argument('--disable-blink-features=AutomationControlled') # Anti-deteksi
+        # user agent sangat menyebabkan verifikasi captcha
+        options.add_argument('--lang=en-US,en;q=0.9') # Mengatur bahasa browser ke Inggris AS
+        
+        # xxxx   disable setuit sandbox menyebabkan captcha     xxxx options.add_argument('--disable-setuid-sandbox') # browser akan berjalan tanpa batasan hak akses yang diterapkan oleh setuid sandbox. Ini bisa meningkatkan risiko keamanan jika browser terkena serangan.
+        # xxxx   disable ini menyebabkan captcha     xxxx options.add_argument('--disable-extensions')
+        # xxxx   menyebabkan captcha     xxxx options.add_argument('--disable-popup-blocking')
+        options.add_argument('--ignore-certificate-errors')
+        
+        options.add_argument('--disable-web-security')  # Bypass kebijakan same-origin :cite[9] # 0.26
+        # xxxx   menyebabkan captcha     xxxx  options.add_argument('--disable-features=VizDisplayCompositor')  # Nonaktifkan fitur yang bisa dideteks
+        options.add_argument("--disable-features=IsolateOrigins,site-per-process")
+        options.add_argument("--disable-site-isolation-trials")
+        options.add_argument("--allow-running-insecure-content") # 0:45
+        options.add_argument("--disable-renderer-backgrounding") # 0:36
+        options.add_argument("--disable-background-timer-throttling")# 1:10
+        options.add_argument("--disable-backgrounding-occluded-windows") # 0:39
+        options.add_argument("--disable-client-side-phishing-detection") # 1:33
+        options.add_argument("--disable-component-extensions-with-background-pages") # 0.27
+        options.add_argument("--disable-default-apps") # 0.30
+        options.add_argument("--disable-hang-monitor") # 0.39
+        options.add_argument("--disable-ipc-flooding-protection") # 0.31
+        options.add_argument("--disable-prompt-on-repost") # 0.36
+        options.add_argument("--disable-sync")
+        options.add_argument("--disable-translate") # 0.48
+        options.add_argument("--metrics-recording-only") # 0.53
+        options.add_argument("--no-first-run")
+        options.add_argument("--safebrowsing-disable-auto-update") # 0.28
+        # xxxx terdeteksi sofware automati  xxxxx   options.add_argument("--enable-automation")
+        options.add_argument("--password-store=basic")
+        options.add_argument("--use-mock-keychain") # 0.20
+        
+        
+        windows_ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
+        options.add_argument(f'--user-agent={windows_ua}')
+        options.add_argument('--sec-ch-ua-platform="Windows"')
+        options.add_argument('--sec-ch-ua-mobile=?0')
+        options.add_argument('--timezone=Asia/Jakarta')
+        options.add_argument('--lang=en-US,en;q=0.9,id;q=0.8')
+        
+        options.add_argument(f'--user-data-dir={user_profile_path}')   
+
         driver = uc.Chrome(options=options)
+        
+        platform_override_script = """
+            // === DEEPLY EMBEDDED PLATFORM OVERRIDE ===
+            
+            // 1. Navigator platform override (MOST CRITICAL)
+            const originalPlatform = Object.getOwnPropertyDescriptor(Navigator.prototype, 'platform');
+            Object.defineProperty(navigator, 'platform', {
+                get: () => 'Win32',
+                configurable: true,
+                enumerable: true
+            });
+            
+            // 2. User agent consistency
+            Object.defineProperty(navigator, 'userAgent', {
+                get: () => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36',
+                configurable: true
+            });
+            
+            // 3. OSCpu override (Firefox legacy, but some sites check)
+            Object.defineProperty(navigator, 'oscpu', {
+                get: () => 'Windows NT 10.0',
+                configurable: true
+            });
+            
+            // 4. Vendor override
+            Object.defineProperty(navigator, 'vendor', {
+                get: () => 'Google Inc.',
+                configurable: true
+            });
+            
+            // 5. Language preferences
+            Object.defineProperty(navigator, 'language', {
+                get: () => 'en-US'
+            });
+            
+            Object.defineProperty(navigator, 'languages', {
+                get: () => ['en-US', 'en', 'id']
+            });
+            
+            // 6. Hardened webdriver detection removal
+            Object.defineProperty(navigator, 'webdriver', {
+                get: () => undefined,
+                set: (val) => {},
+                configurable: true
+            });
+            
+            // 7. Chrome runtime spoofing
+            if (!window.chrome) {
+                window.chrome = {};
+            }
+            
+            if (!window.chrome.runtime) {
+                window.chrome.runtime = {
+                    id: 'dummy',
+                    getURL: () => '',
+                    connect: () => ({})
+                };
+            }
+            
+            // 8. Performance timing spoofing (Linux vs Windows differences)
+            const originalTime = performance.now;
+            performance.now = function() {
+                const time = originalTime.apply(performance, arguments);
+                // Add small random variance to mimic Windows performance characteristics
+                return time + Math.random() * 2;
+            };
+            
+            console.log('✅ Comprehensive Windows platform override injected');
+            """
+            
+        driver.execute_script(platform_override_script)
+        
         print("WebDriver berhasil diinisialisasi.")
 
         target_url = f"https://www.tiktok.com/@{tiktok_username}"
@@ -119,13 +238,13 @@ def run_tiktok_bot_task(user_id: int, is_trial_run: bool = False):
         time.sleep(5)
 
         # Muat cookies
-        for cookie in cookies:
-            if 'domain' in cookie:
-                del cookie['domain']
-            driver.add_cookie(cookie)
-        driver.refresh()
-        print("Cookies dimuat dan halaman direfresh.")
-        time.sleep(5)
+        # for cookie in cookies:
+        #     if 'domain' in cookie:
+        #         del cookie['domain']
+        #     driver.add_cookie(cookie)
+        # driver.refresh()
+        # print("Cookies dimuat dan halaman direfresh.")
+        # time.sleep(5)
 
         videos_area_loaded_ok = False
         for attempt in range(3):

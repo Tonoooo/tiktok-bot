@@ -15,6 +15,12 @@ dist/
 build/
 *.whl
 
+browser_profiles/
+.browser_profiles/
+
+browser_profiles_test/
+.browser_profiles_test/
+
 # Custom for this TikTok Bot Project
 # Virtual environment folder
 .venv/
