@@ -1,7 +1,6 @@
 import time
 import os
 import requests
-from pydub import AudioSegment
 import speech_recognition as sr
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -9,63 +8,37 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
 import subprocess
 
-AudioSegment.converter = "/usr/bin/ffmpeg"
-
-
-
-# --- Fungsi Helper yang sudah ada ---
-def download_audio(url, filename="captcha.mp3"):
+# --- FUNGSI HELPER YANG DIPERBARUI ---
+def download_audio(url, user_id):
+    """Mengunduh file audio dari URL dengan nama file unik."""
+    filename = f"captcha_{user_id}.mp3"
     try:
         response = requests.get(url, stream=True)
         response.raise_for_status()
         with open(filename, 'wb') as f:
             for chunk in response.iter_content(chunk_size=8192):
                 f.write(chunk)
-        print("Audio berhasil diunduh ke {filename}")
-        return True
+        print(f"Audio berhasil diunduh ke {filename}")
+        return filename
     except requests.exceptions.RequestException as e:
         print(f"Error saat mengunduh audio: {e}")
-        return False
+        return None
 
-def solve_audio_captcha(mp3_path="captcha.mp3"):
-    """
-    Mengonversi, menambahkan hening, dan mentranskripsi audio menggunakan Popen untuk mencegah deadlock.
-    """
-    wav_path = "captcha_final.wav"
+def solve_audio_captcha(mp3_path, user_id):
+    """Mengonversi dan mentranskripsi audio menggunakan nama file unik."""
+    wav_path = f"captcha_final_{user_id}.wav"
     try:
-        # --- BLOK PROSES AUDIO PALING TANGGUH DENGAN POPEN ---
         print("Memulai konversi audio dengan subprocess.Popen...")
-        
         command = [
-            "/usr/bin/ffmpeg",
-            "-nostdin",         # <-- TAMBAHKAN INI
-            "-y",
-            "-i", mp3_path,
-            "-af", "adelay=2000|2000",
-            "-loglevel", "error", # <-- TAMBAHKAN INI
-            wav_path
+            "/usr/bin/ffmpeg", "-nostdin", "-y", "-i", mp3_path,
+            "-af", "adelay=2000|2000", "-loglevel", "error", wav_path
         ]
-
-        # Jalankan perintah menggunakan Popen
-        process = subprocess.Popen(
-            command,
-            stdout=subprocess.PIPE, # Alihkan stdout
-            stderr=subprocess.PIPE  # Alihkan stderr
-        )
-        
-        # Tunggu proses selesai DAN baca output/errornya untuk mencegah buffer penuh
-        stdout, stderr = process.communicate(timeout=15) # Tambahkan timeout 15 detik
-
-        # Periksa apakah ffmpeg berhasil
+        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        stdout, stderr = process.communicate(timeout=15)
         if process.returncode != 0:
-            print(f"Error saat menjalankan ffmpeg. Return code: {process.returncode}")
-            print(f"FFMPEG Stderr: {stderr.decode('utf-8', 'ignore')}")
             raise subprocess.CalledProcessError(process.returncode, command, output=stdout, stderr=stderr)
-        
         print("Konversi audio ke WAV dengan jeda hening berhasil.")
-        # --- SELESAI BLOK BARU ---
 
-        # Transkripsi audio (bagian ini tetap sama)
         recognizer = sr.Recognizer()
         with sr.AudioFile(wav_path) as source:
             audio_data = recognizer.record(source)
@@ -74,24 +47,16 @@ def solve_audio_captcha(mp3_path="captcha.mp3"):
         print(f"Hasil transkripsi: {text}")
         return text
         
-    except subprocess.TimeoutExpired:
-        print("Proses FFMPEG melebihi batas waktu. Kemungkinan terjadi hang.")
-        process.kill()
-        return None
     except Exception as e:
         print(f"Error saat memproses audio: {e}")
         return None
     finally:
-        # Hapus file sementara
         if os.path.exists(mp3_path): os.remove(mp3_path)
         if os.path.exists(wav_path): os.remove(wav_path)
 
-# --- FUNGSI UTAMA BARU YANG BISA DI-IMPORT ---
-def solve_captcha(driver):
-    """
-    Mendeteksi dan menyelesaikan captcha TikTok di halaman saat ini.
-    Mengembalikan True jika berhasil, False jika gagal.
-    """
+# --- FUNGSI UTAMA YANG DIPERBARUI ---
+def solve_captcha(driver, user_id):
+    """Mendeteksi dan menyelesaikan captcha, menggunakan user_id untuk file sementara."""
     try:
         print("Mendeteksi modal captcha...")
         captcha_modal = WebDriverWait(driver, 10).until(
@@ -99,7 +64,6 @@ def solve_captcha(driver):
         )
         print("Modal captcha terdeteksi.")
         
-        # Beralih ke captcha audio
         try:
             audio_button = captcha_modal.find_element(By.ID, "captcha_switch_button")
             audio_button.click()
@@ -108,17 +72,17 @@ def solve_captcha(driver):
         except Exception:
             print("Sudah dalam mode audio atau tombol tidak ditemukan.")
 
-        # Loop utama untuk menyelesaikan captcha
-        for audio_refresh_attempt in range(3):
+        for audio_refresh_attempt in range(6):
             print(f"\n--- Percobaan Audio ke-{audio_refresh_attempt + 1} ---")
             audio_element = WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.TAG_NAME, "audio")))
             audio_url = audio_element.get_attribute('src')
             if not audio_url: raise Exception("URL Audio tidak ditemukan.")
 
             solved_text = None
-            for _ in range(3): # Coba transkrip audio yang sama 3x
-                if download_audio(audio_url):
-                    solved_text = solve_audio_captcha()
+            for _ in range(3):
+                mp3_filename = download_audio(audio_url, user_id)
+                if mp3_filename:
+                    solved_text = solve_audio_captcha(mp3_filename, user_id)
                     if solved_text and len(solved_text) > 2:
                         break
                 time.sleep(1)
@@ -133,8 +97,7 @@ def solve_captcha(driver):
                 verify_button.click()
                 print("Tombol 'Verify' diklik.")
                 
-                time.sleep(5)
-                # Cek apakah modal sudah hilang
+                time.sleep(7)
                 if not driver.find_elements(By.CSS_SELECTOR, '.captcha-verify-container'):
                     print("✅✅✅ CAPTCHA BERHASIL DISELESAIKAN! ✅✅✅")
                     return True
@@ -151,7 +114,7 @@ def solve_captcha(driver):
 
     except (TimeoutException, NoSuchElementException):
         print("Tidak ada captcha yang terdeteksi.")
-        return True # Dianggap berhasil jika tidak ada captcha
+        return True
     except Exception as e:
         print(f"Terjadi error pada alur penyelesaian captcha: {e}")
         return False

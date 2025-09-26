@@ -13,6 +13,8 @@ from datetime import datetime
 from datetime import timedelta
 from rq import get_current_job
 
+from akses_komen.captcha_solver import solve_captcha
+
 VPS_API_BASE_URL = os.getenv('VPS_API_BASE_URL', "http://103.52.114.253:5000") # Sesuaikan dengan IP VPS Anda
 API_BOT_KEY = os.getenv('API_BOT_KEY', "super_secret_bot_key_123") # Sesuaikan dengan API Key Anda
 
@@ -177,7 +179,6 @@ def generate_qr_and_wait_for_login(user_id: int): # Sudah benar, tanpa api_clien
     
 
     try:
-        
         # Tentukan path unik untuk profil pengguna ini
         user_profile_path = os.path.abspath(os.path.join(PROFILES_DIR, f'user_{user_id}'))
         print(f"Menggunakan path profil peramban: {user_profile_path}")
@@ -227,7 +228,7 @@ def generate_qr_and_wait_for_login(user_id: int): # Sudah benar, tanpa api_clien
         options.add_argument("--use-mock-keychain") # 0.20
         
         
-        windows_ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
+        # windows_ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
         # options.add_argument(f'--user-agent={windows_ua}')
         # options.add_argument('--sec-ch-ua-platform="Windows"')
         # options.add_argument('--sec-ch-ua-mobile=?0')
@@ -329,6 +330,13 @@ def generate_qr_and_wait_for_login(user_id: int): # Sudah benar, tanpa api_clien
             driver.get("https://www.tiktok.com/")
         else:
             driver.get(target_url)
+            
+        print("Memeriksa halaman untuk captcha setelah navigasi awal...")
+        if not solve_captcha(driver, user_id):
+            print("Gagal menyelesaikan captcha awal. Menghentikan bot.")
+            # Anda bisa menambahkan error handling lebih lanjut di sini jika perlu
+            raise Exception("Failed to solve initial captcha")
+        print("Pengecekan captcha awal selesai.")
 
         print("Menunggu halaman TikTok selesai dimuat...")
         WebDriverWait(driver, 15).until(lambda driver: driver.execute_script('return document.readyState') == 'complete')
@@ -396,6 +404,41 @@ def generate_qr_and_wait_for_login(user_id: int): # Sudah benar, tanpa api_clien
                 print(f"STOP: Kunci untuk user {user_id} telah dihapus atau diambil alih. Job {current_job.id} ini berhenti.")
                 raise Exception("Process superseded by another job.") # Keluar dari loop
             
+            # # --- LOGIKA DETEKSI BARU YANG FLEKSIBEL ---
+            # # Di setiap iterasi, kita periksa salah satu dari dua kondisi sukses.
+            # try:
+            #     # KONDISI SUKSES 1: Avatar profil muncul (login penuh tanpa captcha)
+            #     profile_button_locator = (By.CSS_SELECTOR, 'button[aria-haspopup="dialog"] img[class*="ImgAvatar"]')
+            #     WebDriverWait(driver, 2).until(EC.presence_of_element_located(profile_button_locator))
+            #     print("INDIKATOR SUKSES: Tombol profil user (avatar) terdeteksi.")
+            #     login_successful = True
+            #     break # Berhasil, keluar dari loop
+
+            # except TimeoutException:
+            #     # Jika avatar tidak ditemukan, kita periksa kondisi sukses kedua.
+            #     try:
+            #         # KONDISI SUKSES 2: Modal Captcha muncul (login berhasil, perlu diselesaikan)
+            #         WebDriverWait(driver, 2).until(EC.presence_of_element_located((By.CSS_SELECTOR, '.captcha-verify-container-main-page')))
+            #         print("INDIKATOR SUKSES: Modal captcha terdeteksi setelah login.")
+            #         login_successful = True
+            #         break # Berhasil, keluar dari loop
+            #     except TimeoutException:
+            #         # Jika keduanya tidak ada, login belum selesai. Lanjutkan loop.
+            #         print(f"Menunggu konfirmasi login (avatar atau captcha belum muncul)... Waktu berlalu: {int(time.time() - start_time)}s.")
+            
+            try:
+                # INDIKATOR UTAMA: Tunggu hingga seluruh kontainer login menghilang.
+                print(f"Menunggu kontainer login (#loginContainer) menghilang (maks {RECHECK_INTERVAL} detik)...")
+                WebDriverWait(driver, RECHECK_INTERVAL).until(
+                    EC.invisibility_of_element_located((By.ID, "loginContainer"))
+                )
+                print("Kontainer login telah menghilang. Proses login di ponsel selesai.")
+                process_finished = True
+                break # Keluar dari loop utama karena proses selesai
+
+            except TimeoutException:
+                print(f"Menunggu QR discan (kontainer login masih terlihat)... Waktu berlalu: {int(time.time() - start_time)}s.")
+            
             current_time = time.time()
 
             # --- Ambil data QR code terbaru dari canvas (untuk visualisasi di frontend) ---
@@ -413,69 +456,94 @@ def generate_qr_and_wait_for_login(user_id: int): # Sudah benar, tanpa api_clien
                 except Exception as e:
                     print(f"ERROR: Gagal mendapatkan data QR code dari canvas (update periodik): {e}.")
 
-            # ---------- Deteksi Login Berhasil (dengan timeout pendek untuk setiap langkah) ----------
-            try:
-                # Sinyal Awal (Opsional, untuk debugging): Deteksi tampilan "QR code scanned" overlay
-                try:
-                    print("DEBUG: Mencoba mendeteksi tampilan 'QR code scanned' overlay (maks 5 detik)...")
-                    scanned_overlay_locator = (By.CSS_SELECTOR, '[data-e2e="qr-code"] .css-n2w5z3-DivCodeMask') 
-                    WebDriverWait(driver, 5).until(EC.presence_of_element_located(scanned_overlay_locator))
-                    print("DEBUG: Tampilan 'QR code scanned' overlay terdeteksi.")
-                except TimeoutException:
-                    pass # Lewati jika tidak terdeteksi
+            # # ---------- Deteksi Login Berhasil (dengan timeout pendek untuk setiap langkah) ----------
+            # try:
+            #     # Sinyal Awal (Opsional, untuk debugging): Deteksi tampilan "QR code scanned" overlay
+            #     try:
+            #         print("DEBUG: Mencoba mendeteksi tampilan 'QR code scanned' overlay (maks 5 detik)...")
+            #         scanned_overlay_locator = (By.CSS_SELECTOR, '[data-e2e="qr-code"] .css-n2w5z3-DivCodeMask') 
+            #         WebDriverWait(driver, 5).until(EC.presence_of_element_located(scanned_overlay_locator))
+            #         print("DEBUG: Tampilan 'QR code scanned' overlay terdeteksi.")
+            #     except TimeoutException:
+            #         pass # Lewati jika tidak terdeteksi
 
-                # Sinyal Awal (Opsional, untuk debugging): Deteksi notifikasi "Logged in"
-                try:
-                    print("DEBUG: Mencoba mendeteksi notifikasi 'Logged in' (maks 5 detik)...")
-                    logged_in_toast_locator = (By.XPATH, "//div[@role='alert']/span[text()='Logged in']")
-                    WebDriverWait(driver, 5).until(EC.presence_of_element_located(logged_in_toast_locator))
-                    print("DEBUG: Notifikasi 'Logged in' terdeteksi.")
-                except TimeoutException:
-                    pass # Lewati jika tidak terdeteksi
+            #     # Sinyal Awal (Opsional, untuk debugging): Deteksi notifikasi "Logged in"
+            #     try:
+            #         print("DEBUG: Mencoba mendeteksi notifikasi 'Logged in' (maks 5 detik)...")
+            #         logged_in_toast_locator = (By.XPATH, "//div[@role='alert']/span[text()='Logged in']")
+            #         WebDriverWait(driver, 5).until(EC.presence_of_element_located(logged_in_toast_locator))
+            #         print("DEBUG: Notifikasi 'Logged in' terdeteksi.")
+            #     except TimeoutException:
+            #         pass # Lewati jika tidak terdeteksi
 
 
-                # PRIORITAS UTAMA 1: Modal QR code menghilang
-                print(f"Menunggu modal QR code menghilang (maks {RECHECK_INTERVAL} detik)...")
-                WebDriverWait(driver, RECHECK_INTERVAL).until( 
-                    EC.invisibility_of_element_located((By.CSS_SELECTOR, '[data-e2e="qr-code"]'))
-                )
-                print("Modal QR code telah menghilang. Lanjut ke verifikasi akhir.")
+            #     # PRIORITAS UTAMA 1: Modal QR code menghilang
+            #     print(f"Menunggu modal QR code menghilang (maks {RECHECK_INTERVAL} detik)...")
+            #     WebDriverWait(driver, RECHECK_INTERVAL).until( 
+            #         EC.invisibility_of_element_located((By.CSS_SELECTOR, '[data-e2e="qr-code"]'))
+            #     )
+            #     print("Modal QR code telah menghilang. Lanjut ke verifikasi akhir.")
 
-                # Jika modal sudah menghilang, baru kita bisa memberikan waktu tunggu yang lebih lama untuk redirect/profil
-                # PRIORITAS UTAMA 2: Redirect ke URL profil (konfirmasi final)
-                print(f"Memverifikasi redirect ke URL profil: {target_url_base} (maks 15 detik)...")
-                WebDriverWait(driver, 15).until( 
-                    EC.url_contains(target_url_base)
-                )
-                print("Berhasil dialihkan ke halaman profil.")
-
-                # PRIORITAS UTAMA 3: Deteksi tombol profil user (indikator kuat setelah redirect)
-                print("Menunggu tombol profil user muncul (indikator login berhasil)...")
-                profile_button_locator = (By.CSS_SELECTOR, 'button[aria-haspopup="dialog"] img[class*="ImgAvatar"]')
-                WebDriverWait(driver, 15).until(
-                    EC.presence_of_element_located(profile_button_locator)
-                )
-                print("Tombol profil user (avatar) terdeteksi. Login berhasil dikonfirmasi.")
+            #     # Jika modal sudah menghilang, baru kita bisa memberikan waktu tunggu yang lebih lama untuk redirect/profil
+            #     # PRIORITAS UTAMA 2: Redirect ke URL profil (konfirmasi final)
+            #     print(f"Memverifikasi redirect ke URL profil: {target_url_base} (maks 15 detik)...")
+            #     WebDriverWait(driver, 15).until( 
+            #         EC.url_contains(target_url_base)
+            #     )
+            #     print("Berhasil dialihkan ke halaman profil.")
                 
-                login_successful = True # Hanya set True jika SEMUA 3 langkah utama berhasil
-                print(f"Login QR code berhasil untuk user {user_id}. Berhasil dialihkan ke halaman profil.")
-                break # Keluar dari loop utama karena login berhasil
+            #     print("Mendeteksi modal captcha...")
+            #     WebDriverWait(driver, 10).until(
+            #         EC.presence_of_element_located((By.CSS_SELECTOR, '.captcha-verify-container'))
+            #     )
+            #     print("Modal captcha terdeteksi.")
 
-            except TimeoutException: # Ini akan menangkap kegagalan dari salah satu dari 3 prioritas utama yang timeout
-                # Jika salah satu dari 3 prioritas utama (termasuk modal menghilang) timeout
-                print(f"Login belum dikonfirmasi (salah satu indikator utama timeout). Waktu berlalu total: {int(current_time - start_time)}s. Mencoba lagi.")
-                # Tidak perlu time.sleep(RECHECK_INTERVAL) lagi di sini, karena loop while akan tidur secara alami jika tidak ada yang lain untuk dilakukan,
-                # atau QR update akan menangani jeda jika perlu. Loop akan langsung ke iterasi berikutnya.
-                continue # Lanjutkan loop utama untuk update QR dan retry deteksi login
+            #     # PRIORITAS UTAMA 3: Deteksi tombol profil user (indikator kuat setelah redirect)
+            #     print("Menunggu tombol profil user muncul (indikator login berhasil)...")
+            #     profile_button_locator = (By.CSS_SELECTOR, 'button[aria-haspopup="dialog"] img[class*="ImgAvatar"]')
+            #     WebDriverWait(driver, 15).until(
+            #         EC.presence_of_element_located(profile_button_locator)
+            #     )
+            #     print("Tombol profil user (avatar) terdeteksi. Login berhasil dikonfirmasi.")
+                
+            #     login_successful = True # Hanya set True jika SEMUA 3 langkah utama berhasil
+            #     print(f"Login QR code berhasil untuk user {user_id}. Berhasil dialihkan ke halaman profil.")
+            #     break # Keluar dari loop utama karena login berhasil
 
-            except WebDriverException as we: # Ini menangkap error WebDriver yang lebih umum
-                print(f"WebDriver ERROR saat menunggu login konfirmasi untuk user {user_id}: {we}. Mencoba me-refresh halaman atau driver.")
+            # except TimeoutException: # Ini akan menangkap kegagalan dari salah satu dari 3 prioritas utama yang timeout
+            #     # Jika salah satu dari 3 prioritas utama (termasuk modal menghilang) timeout
+            #     print(f"Login belum dikonfirmasi (salah satu indikator utama timeout). Waktu berlalu total: {int(current_time - start_time)}s. Mencoba lagi.")
+            #     # Tidak perlu time.sleep(RECHECK_INTERVAL) lagi di sini, karena loop while akan tidur secara alami jika tidak ada yang lain untuk dilakukan,
+            #     # atau QR update akan menangani jeda jika perlu. Loop akan langsung ke iterasi berikutnya.
+            #     continue # Lanjutkan loop utama untuk update QR dan retry deteksi login
+
+            # except WebDriverException as we: # Ini menangkap error WebDriver yang lebih umum
+            #     print(f"WebDriver ERROR saat menunggu login konfirmasi untuk user {user_id}: {we}. Mencoba me-refresh halaman atau driver.")
+            #     try:
+            #         driver.get(target_url)
+            #         time.sleep(5)
+            #     except Exception as nav_e:
+            #         print(f"Gagal me-refresh halaman setelah WebDriver error: {nav_e}. Driver mungkin rusak.")
+            #         raise nav_e
+            time.sleep(2)
+            
+        if process_finished:
+            print("Verifikasi kondisi akhir halaman setelah modal login hilang...")
+            time.sleep(3) # Beri waktu 3 detik untuk halaman me-render kondisi barunya
+            try:
+                # Apakah captcha muncul?
+                driver.find_element(By.CSS_SELECTOR, '.captcha-verify-container')
+                print("INDIKATOR SUKSES: Modal captcha terdeteksi. Login dianggap berhasil.")
+                login_successful = True
+            except NoSuchElementException:
+                # Jika tidak ada captcha, apakah avatar profil muncul?
                 try:
-                    driver.get(target_url)
-                    time.sleep(5)
-                except Exception as nav_e:
-                    print(f"Gagal me-refresh halaman setelah WebDriver error: {nav_e}. Driver mungkin rusak.")
-                    raise nav_e
+                    driver.find_element(By.CSS_SELECTOR, 'button[aria-haspopup="dialog"] img[class*="ImgAvatar"]')
+                    print("INDIKATOR SUKSES: Tombol profil user (avatar) terdeteksi.")
+                    login_successful = True
+                except NoSuchElementException:
+                    print("GAGAL: Setelah modal login hilang, tidak ditemukan avatar profil ataupun captcha.")
+                    login_successful = False
 
         if login_successful:
             # PERUBAHAN: Simpan cookies dan perbarui status QR melalui APIClient

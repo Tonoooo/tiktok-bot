@@ -109,7 +109,7 @@ def run_tiktok_bot_task(user_id: int, is_trial_run: bool = False):
         # STEALTH HEADLESS OPTIONS
         # =========================
         options = uc.ChromeOptions()
-        # options.add_argument('--headless') 
+        options.add_argument('--headless') 
         
         options.add_argument('--disable-gpu') # Diperlukan untuk headless di beberapa sistem
         options.add_argument('--no-sandbox') # Diperlukan untuk headless di Linux server
@@ -241,7 +241,7 @@ def run_tiktok_bot_task(user_id: int, is_trial_run: bool = False):
         
         # Cek dan selesaikan captcha jika muncul setelah membuka halaman
         print("Memeriksa halaman untuk captcha setelah navigasi awal...")
-        if not solve_captcha(driver):
+        if not solve_captcha(driver, user_id):
             print("Gagal menyelesaikan captcha awal. Menghentikan bot.")
             return # Hentikan eksekusi jika captcha tidak bisa diselesaikan
         print("Pengecekan captcha awal selesai.")
